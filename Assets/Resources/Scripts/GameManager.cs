@@ -53,7 +53,7 @@ public class GameManager : MonoBehaviour
             yield return StartCoroutine(PlaceBlock());
             yield return new WaitForSeconds(0.5f);
 
-            MainAI.Instance.MoveAI(Random.Range(0, 4));
+            MainAI.Instance.AISequence();
 
             yield return null;
         }

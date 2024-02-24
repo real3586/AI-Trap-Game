@@ -16,8 +16,6 @@ public class PlaceManager : MonoBehaviour
         {
             CollidingWithAnything = false;
         }
-
-        Debug.Log(CollidingWithAnything);
     }
     private void OnTriggerExit(Collider other)
     {
