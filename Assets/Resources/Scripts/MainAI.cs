@@ -3,17 +3,30 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Rand = UnityEngine.Random;
+
 
 public class MainAI : MonoBehaviour
 {
     public static MainAI Instance { get; private set; }
-
     struct State
     {
+        /// <summary>
+        /// How many sides are blocked? Uses a Quadrant system.
+        /// </summary>
         public List<States> status;
+        /// <summary>
+        /// Holds a list booleans with indexes of the Actions enum, indicating whether or not that action is possible. 
+        /// </summary>
         public List<bool> possibleActions;
+        /// <summary>
+        /// What did the AI decide to do in this situation?
+        /// </summary>
         public Actions decidedAction;
-        public bool decisionWasGood;
+        /// <summary>
+        /// -1, 0, and 1, with -1 being bad, 0 being okay, and 1 being good.
+        /// </summary>
+        public int decisionOutcome;
     }
 
     /// <summary>
@@ -48,7 +61,7 @@ public class MainAI : MonoBehaviour
     public void AISequence()
     {
         int xPos = (int)transform.position.x;
-        int zPos = (int)transform.position.z; 
+        int zPos = (int)transform.position.z;
 
         // first check all possible moves, if any
         List<bool> possibleMoves = PossibleDirections(xPos, zPos);
@@ -95,14 +108,14 @@ public class MainAI : MonoBehaviour
         Debug.Log(newState.decidedAction);
 
         // determine whether it was a good choice
-        Vector3 previousPosition = SimulateMove(newState.decidedAction, currentPosition);
-        newState.decisionWasGood = DetermineChoiceOutcome(currentPosition, previousPosition);
+        Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
+        newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
 
         // add the new state to the Q table
         QTable.Add(newState);
 
         // finally check if the AI is on a winning square
-        if (CheckWin(xPos, zPos))
+        if (CheckWin((int)hypotheticalPos.x, (int)hypotheticalPos.z))
         {
             GameManager.Instance.GameEnd(true);
             return;
@@ -111,6 +124,9 @@ public class MainAI : MonoBehaviour
 
     Actions DecideAction(State state, int xPos, int zPos)
     {
+        // Take a list of all possible actions
+        List<Actions> potentialActions = new();
+
         // Check if the AI has made decisions in this state before
         if (QTable.Any(entry => entry.status.SequenceEqual(state.status)))
         {
@@ -119,72 +135,36 @@ public class MainAI : MonoBehaviour
             {
                 if (qEntry.status.SequenceEqual(state.status))
                 {
-                    if (qEntry.decisionWasGood)
+                    if (qEntry.decisionOutcome == 0)
                     {
-                        // If past decisions were good, choose the action with the highest frequency
-                        // Make sure the action is possible before making it
+                        // Make sure the action is possible before adding it
                         if (CanMoveInDirection((Directions)qEntry.decidedAction, xPos, zPos))
                         {
-                            Actions mostFrequentGoodAction = GetMostFrequentGoodAction(qEntry);
-                            return mostFrequentGoodAction;
-                        }
-                        else
-                        {
-                            // If the move is not possible, just keep searching again
-                            continue;
+                            potentialActions.Add(qEntry.decidedAction);
                         }
                     }
-                    else
+                    else if (qEntry.decisionOutcome == 1)
                     {
-                        // If past decisions were not good, keep looking for better options
-                        continue;
+                        // Again, make sure the action is possible.
+                        // This time, the action is worth double, so add it twice.
+                        if (CanMoveInDirection((Directions)qEntry.decidedAction, xPos, zPos))
+                        {
+                            potentialActions.Add(qEntry.decidedAction);
+                            potentialActions.Add(qEntry.decidedAction);
+                        }
                     }
                 }
+            }
+            if (potentialActions.Count > 0)
+            {
+                int randomIndex = Rand.Range(0, potentialActions.Count - 1);
+                return potentialActions[randomIndex];
             }
         }
 
         // If no past decisions, choose a random action from the possible actions
-        Debug.Log("random action chosen, no past decisions");
+        Debug.Log("random action chosen");
         return ChooseRandomAction(state.possibleActions);
-    }
-
-    Actions GetMostFrequentGoodAction(State qEntry)
-    {
-        // Assuming that possibleActions and decisionWasGood are parallel lists
-        int maxFrequency = 0;
-        Actions mostFrequentGoodAction = Actions.MoveNorth; // Default action in case of issues
-
-        for (int i = 0; i < qEntry.possibleActions.Count; i++)
-        {
-            if (qEntry.possibleActions[i] && qEntry.decisionWasGood)
-            {
-                // Count the frequency of each good action
-                int frequency = CountActionFrequency(qEntry, (Actions)i);
-                if (frequency > maxFrequency)
-                {
-                    maxFrequency = frequency;
-                    mostFrequentGoodAction = (Actions)i;
-                }
-            }
-        }
-
-        return mostFrequentGoodAction;
-    }
-
-    int CountActionFrequency(State qEntry, Actions action)
-    {
-        // Count the frequency of the given action in the past decisions
-        int frequency = 0;
-
-        for (int i = 0; i < qEntry.possibleActions.Count; i++)
-        {
-            if (qEntry.possibleActions[i] && qEntry.decisionWasGood && (Actions)i == action)
-            {
-                frequency++;
-            }
-        }
-
-        return frequency;
     }
 
     Actions ChooseRandomAction(List<bool> possibleActions)
@@ -202,7 +182,7 @@ public class MainAI : MonoBehaviour
 
         if (validActions.Count > 0)
         {
-            int randomIndex = UnityEngine.Random.Range(0, validActions.Count);
+            int randomIndex = Rand.Range(0, validActions.Count);
             return validActions[randomIndex];
         }
         else
@@ -212,16 +192,41 @@ public class MainAI : MonoBehaviour
         }
     }
 
-    bool DetermineChoiceOutcome(Vector3 previousPos, Vector3 currentPos)
+    int DetermineChoiceOutcome(Vector3 currentPos, Vector3 newPos)
     {
-        // Calculate the distance to the closest edge before taking the action
-        float distanceBefore = CalculateDistanceToClosestEdge((int)previousPos.x, (int)previousPos.z);
+        int currentX = (int)currentPos.x;
+        int currentZ = (int)currentPos.z;
 
-        // Calculate the distance to the closest edge after taking the action
-        float distanceAfter = CalculateDistanceToClosestEdge((int)currentPos.x, (int)currentPos.z);
+        int newX = (int)newPos.x;
+        int newZ = (int)newPos.z;
 
-        // Determine if the decision was good or bad
-        return distanceAfter < distanceBefore;
+        int choiceOutcome;
+
+        // Calculate distances to each edge before and after the move
+        float distanceBefore = CalculateDistanceToClosestEdge(currentX, currentZ);
+        float distanceAfter = CalculateDistanceToClosestEdge(newX, newZ);
+
+        // Calculate how the move affects proximity to edges
+        float proximityChange = distanceBefore - distanceAfter;
+
+        // Assign outcome based on proximity change
+        if (proximityChange > 0)
+        {
+            // Good move: moved closer to closest edge
+            choiceOutcome = 1;
+        }
+        else if (proximityChange < 0)
+        {
+            // Bad move: moved away from closest edge
+            choiceOutcome = -1;
+        }
+        else
+        {
+            // Okay move: neither closer nor farther from closest edge
+            choiceOutcome = 0;
+        }
+
+        return choiceOutcome;
     }
 
     float CalculateDistanceToClosestEdge(int xPos, int zPos)
