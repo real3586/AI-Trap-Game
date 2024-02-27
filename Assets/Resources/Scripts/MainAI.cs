@@ -263,13 +263,13 @@ public class MainAI : MonoBehaviour
                 case Directions.East:
                     return currentPos + Vector3.right;
                 case Directions.NorthEast:
-                    return currentPos + new Vector3(1, 0, 1);
+                    return currentPos + Vector3.forward + Vector3.right;
                 case Directions.SouthEast:
-                    return currentPos + new Vector3(1, 0, -1);
+                    return currentPos + Vector3.back + Vector3.right;
                 case Directions.NorthWest:
-                    return currentPos + new Vector3(-1, 0, 1);
+                    return currentPos + Vector3.forward + Vector3.left;
                 case Directions.SouthWest:
-                    return currentPos + new Vector3(-1, 0, -1);
+                    return currentPos + Vector3.back + Vector3.left;
             }
         }
         return Vector3.zero;
@@ -412,16 +412,16 @@ public class MainAI : MonoBehaviour
                     StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.right));
                     break;
                 case Directions.NorthEast:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + new Vector3(1, 0, 1)));
+                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.forward + Vector3.right));
                     break;
                 case Directions.SouthEast:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + new Vector3(1, 0, -1)));
+                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.back + Vector3.right));
                     break;
                 case Directions.NorthWest:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + new Vector3(-1, 0, 1)));
+                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.forward + Vector3.left));
                     break;
                 case Directions.SouthWest:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + new Vector3(-1, 0, -1)));
+                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.back + Vector3.left));
                     break;
             }
         }
