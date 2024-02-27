@@ -10,10 +10,10 @@ public class GameManager : MonoBehaviour
     bool mouseDown;
     RaycastHit hitInfo = new();
     GameObject newBlock;
-    GameObject blockPrefab;
-    GameObject placeManager;
+    [SerializeField] GameObject blockPrefab;
+    [SerializeField] GameObject placeManager;
 
-    Transform allBlocks;
+    [SerializeField] Transform allBlocks;
 
     private void Awake()
     {
@@ -31,13 +31,11 @@ public class GameManager : MonoBehaviour
 
     void AssignMissing()
     {
-        placeManager = GameObject.Find("PlaceManager");
-        blockPrefab = (GameObject)Resources.Load("Prefabs/BlockedSquare", typeof(GameObject));
-        allBlocks = GameObject.Find("AllBlocks").transform;
-
         placeManager.SetActive(false);
+    }
 
-        // temporary please delete
+    public void StartGame()
+    {
         StartCoroutine(MainSequence());
     }
 
@@ -48,6 +46,8 @@ public class GameManager : MonoBehaviour
 
     IEnumerator MainSequence()
     {
+        yield return new WaitForSeconds(1f);
+
         while (true)
         {
             yield return StartCoroutine(PlaceBlock());
