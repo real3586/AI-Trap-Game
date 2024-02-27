@@ -4,15 +4,18 @@ using UnityEngine;
 
 public class BlockedSquare : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    [SerializeField] Material red;
+    [SerializeField] Material green;
+
+    public void ErrorFlash()
     {
-        
+        StartCoroutine(FlashCoroutine());
     }
 
-    // Update is called once per frame
-    void Update()
+    IEnumerator FlashCoroutine()
     {
-        
+        GetComponent<MeshRenderer>().material = red;
+        yield return new WaitForSecondsRealtime(0.15f);
+        GetComponent<MeshRenderer>().material = green;
     }
 }

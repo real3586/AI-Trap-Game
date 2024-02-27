@@ -31,11 +31,14 @@ public class MainAI : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+    }
 
+    public void ResetGrid()
+    {
         // reset the grid
         for (int x = 0; x < MainGrid.GetLength(0); x++)
         {
-            for (int y = 0;  y < MainGrid.GetLength(1); y++)
+            for (int y = 0; y < MainGrid.GetLength(1); y++)
             {
                 MainGrid[x, y] = false;
             }
@@ -72,11 +75,6 @@ public class MainAI : MonoBehaviour
             }
         }
 
-        for (int k = 0;  k < mostBlockedDirections.Count; k++)
-        {
-            Debug.Log(mostBlockedDirections[k]);
-        }
-
         State newState = new()
         {
             status = mostBlockedDirections,
@@ -86,14 +84,15 @@ public class MainAI : MonoBehaviour
         // terminate the function and end the game if there are no possible moves, or the whole list is false
         if (possibleMoves.All(value => value == false))
         {
-            Debug.Log("game over");
+            GameManager.Instance.GameEnd(false);
             return;
         }
 
         // decide the action based on the state and given actions
-        newState.decidedAction = DecideAction(newState);
+        newState.decidedAction = DecideAction(newState, xPos, zPos);
         Vector3 currentPosition = transform.position;
         MoveAI(newState.decidedAction);
+        Debug.Log(newState.decidedAction);
 
         // determine whether it was a good choice
         Vector3 previousPosition = SimulateMove(newState.decidedAction, currentPosition);
@@ -101,9 +100,16 @@ public class MainAI : MonoBehaviour
 
         // add the new state to the Q table
         QTable.Add(newState);
+
+        // finally check if the AI is on a winning square
+        if (CheckWin(xPos, zPos))
+        {
+            GameManager.Instance.GameEnd(true);
+            return;
+        }
     }
 
-    Actions DecideAction(State state)
+    Actions DecideAction(State state, int xPos, int zPos)
     {
         // Check if the AI has made decisions in this state before
         if (QTable.Any(entry => entry.status.SequenceEqual(state.status)))
@@ -116,27 +122,30 @@ public class MainAI : MonoBehaviour
                     if (qEntry.decisionWasGood)
                     {
                         // If past decisions were good, choose the action with the highest frequency
-                        Actions mostFrequentGoodAction = GetMostFrequentGoodAction(qEntry);
-                        return mostFrequentGoodAction;
+                        // Make sure the action is possible before making it
+                        if (CanMoveInDirection((Directions)qEntry.decidedAction, xPos, zPos))
+                        {
+                            Actions mostFrequentGoodAction = GetMostFrequentGoodAction(qEntry);
+                            return mostFrequentGoodAction;
+                        }
+                        else
+                        {
+                            // If the move is not possible, just keep searching again
+                            continue;
+                        }
                     }
                     else
                     {
-                        // If past decisions were not good, choose a random action from the possible actions
-                        Debug.Log("random action chosen, all bad actions");
-                        return ChooseRandomAction(state.possibleActions);
+                        // If past decisions were not good, keep looking for better options
+                        continue;
                     }
                 }
             }
         }
-        else
-        {
-            // If no past decisions, choose a random action from the possible actions
-            Debug.Log("random action chosen, no past decisions");
-            return ChooseRandomAction(state.possibleActions);
-        }
 
-        // Default action in case of issues
-        return Actions.MoveNorth;
+        // If no past decisions, choose a random action from the possible actions
+        Debug.Log("random action chosen, no past decisions");
+        return ChooseRandomAction(state.possibleActions);
     }
 
     Actions GetMostFrequentGoodAction(State qEntry)
@@ -181,7 +190,7 @@ public class MainAI : MonoBehaviour
     Actions ChooseRandomAction(List<bool> possibleActions)
     {
         // Choose a random action from the list of possible actions
-        List<Actions> validActions = new List<Actions>();
+        List<Actions> validActions = new();
 
         for (int i = 0; i < possibleActions.Count; i++)
         {
@@ -358,6 +367,20 @@ public class MainAI : MonoBehaviour
         }
 
         return possibleMoves;
+    }
+
+    bool CheckWin(int posX, int posZ)
+    {
+        // a win is considered to be each side of the square
+        if (posX == 0 || posZ == 0)
+        {
+            return true;
+        }
+        else if (posX == MainGrid.GetLength(0) - 1 || posZ == MainGrid.GetLength(0) - 1)
+        {
+            return true;
+        }
+        return false;
     }
 
     void MoveAI(Actions action)

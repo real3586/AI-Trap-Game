@@ -1,10 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
+
+    Coroutine mainSequence;
+    [SerializeField] GameObject mainAI;
 
     bool isPlacing;
     bool mouseDown;
@@ -15,6 +19,18 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] Transform allBlocks;
 
+    [SerializeField] GameObject panel;
+    [SerializeField] GameObject gameStuff;
+    [SerializeField] TextMeshProUGUI scoreText;
+
+    [SerializeField] GameObject winAndLoseStuff;
+    [SerializeField] TextMeshProUGUI outcomeText;
+
+    /// <summary>
+    /// Store the current score. Player score (shutting down the AI) is first, followed by AI escaping.
+    /// </summary>
+    Vector2 currentScore = Vector2.zero;
+
     private void Awake()
     {
         if (Instance != null)
@@ -24,19 +40,20 @@ public class GameManager : MonoBehaviour
         }
 
         Instance = this;
-        DontDestroyOnLoad(Instance);
 
-        AssignMissing();
-    }
-
-    void AssignMissing()
-    {
         placeManager.SetActive(false);
     }
 
     public void StartGame()
     {
-        StartCoroutine(MainSequence());
+        if (mainSequence == null)
+        {
+            mainSequence = StartCoroutine(MainSequence());
+        }
+        else
+        {
+            StartCoroutine(MainSequence());
+        }
     }
 
     private void Update()
@@ -54,8 +71,6 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.5f);
 
             MainAI.Instance.AISequence();
-
-            yield return null;
         }
     }
 
@@ -93,6 +108,45 @@ public class GameManager : MonoBehaviour
         i.transform.position = new Vector3(hitInfoX, 1, hitInfoZ);
     }
 
+    public void GameEnd(bool didAIWin)
+    {
+        StopCoroutine(mainSequence);
+
+        panel.SetActive(true);
+        winAndLoseStuff.SetActive(true);
+
+        Destroy(newBlock);
+        if (didAIWin)
+        {
+            outcomeText.text = "You Lost!";
+
+            currentScore += Vector2.up;
+        }
+        else
+        {
+            outcomeText.text = "You Win!";
+
+            currentScore += Vector2.right;
+        }
+        scoreText.text = "Score: " + currentScore.x + "-" + currentScore.y;
+    }
+
+    public void ResetGame()
+    {
+        panel.SetActive(false);
+        winAndLoseStuff.SetActive(false);
+
+        mainAI.transform.position = new Vector3(4, 1, 4);
+        MainAI.Instance.ResetGrid();
+
+        for (int i = 0; i < allBlocks.transform.childCount; i++)
+        {
+            Destroy(allBlocks.GetChild(i).gameObject);
+        }
+
+        StartCoroutine(MainSequence());
+    }
+
     IEnumerator PlaceBlock()
     {
         isPlacing = true;
@@ -125,7 +179,7 @@ public class GameManager : MonoBehaviour
                 }
                 else
                 {
-                    Debug.Log("cannot place there noob");
+                    newBlock.GetComponent<BlockedSquare>().ErrorFlash();
                 }
             }
 
@@ -133,6 +187,7 @@ public class GameManager : MonoBehaviour
         }
 
         newBlock.GetComponent<BoxCollider>().enabled = true;
+        newBlock.transform.localScale = Vector3.one * 0.75f;
         newBlock.tag = "Block";
         isPlacing = false;
         placeManager.SetActive(false);
