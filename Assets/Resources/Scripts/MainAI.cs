@@ -22,7 +22,7 @@ public class MainAI : MonoBehaviour
         /// <summary>
         /// What did the AI decide to do in this situation?
         /// </summary>
-        public Actions decidedAction;
+        public Directions decidedAction;
         /// <summary>
         /// -1, 0, and 1, with -1 being bad, 0 being okay, and 1 being good.
         /// </summary>
@@ -37,8 +37,7 @@ public class MainAI : MonoBehaviour
 
     public bool IsLerping { get; private set; }
 
-    enum Directions { North, South, West, East, NorthEast, SouthEast, NorthWest, SouthWest };
-    enum Actions { MoveNorth, MoveSouth, MoveWest, MoveEast, MoveNorthEast, MoveSouthEast, MoveNorthWest, MoveSouthWest };
+    enum Directions { North, South, West, East, NorthEast, SouthEast, NorthWest, SouthWest }
     enum States { NortheastBlocked, NorthwestBlocked, SoutheastBlocked, SouthwestBlocked }
 
     private void Awake()
@@ -122,10 +121,10 @@ public class MainAI : MonoBehaviour
         }
     }
 
-    Actions DecideAction(State state, int xPos, int zPos)
+    Directions DecideAction(State state, int xPos, int zPos)
     {
         // Take a list of all possible actions
-        List<Actions> potentialActions = new();
+        List<Directions> potentialActions = new();
 
         // Check if the AI has made decisions in this state before
         if (QTable.Any(entry => entry.status.SequenceEqual(state.status)))
@@ -167,16 +166,16 @@ public class MainAI : MonoBehaviour
         return ChooseRandomAction(state.possibleActions);
     }
 
-    Actions ChooseRandomAction(List<bool> possibleActions)
+    Directions ChooseRandomAction(List<bool> possibleActions)
     {
         // Choose a random action from the list of possible actions
-        List<Actions> validActions = new();
+        List<Directions> validActions = new();
 
         for (int i = 0; i < possibleActions.Count; i++)
         {
             if (possibleActions[i])
             {
-                validActions.Add((Actions)i);
+                validActions.Add((Directions)i);
             }
         }
 
@@ -188,7 +187,7 @@ public class MainAI : MonoBehaviour
         else
         {
             // If no valid actions, return a default action or handle it as needed
-            return Actions.MoveNorth;
+            return Directions.North;
         }
     }
 
@@ -243,34 +242,15 @@ public class MainAI : MonoBehaviour
         return minDistance;
     }
 
-    Vector3 SimulateMove(Actions action, Vector3 currentPos)
+    Vector3 SimulateMove(Directions dir, Vector3 currentPos)
     {
         // uses the same code as MoveAI, but just returns a Vector3 instead of moving anything
-        Directions dir = (Directions)action;
         int xPos = (int)currentPos.x;
         int zPos = (int)currentPos.z;
 
         if (CanMoveInDirection(dir, xPos, zPos))
         {
-            switch (dir)
-            {
-                case Directions.North:
-                    return currentPos + Vector3.forward;
-                case Directions.South:
-                    return currentPos + Vector3.back;
-                case Directions.West:
-                    return currentPos + Vector3.left;
-                case Directions.East:
-                    return currentPos + Vector3.right;
-                case Directions.NorthEast:
-                    return currentPos + Vector3.forward + Vector3.right;
-                case Directions.SouthEast:
-                    return currentPos + Vector3.back + Vector3.right;
-                case Directions.NorthWest:
-                    return currentPos + Vector3.forward + Vector3.left;
-                case Directions.SouthWest:
-                    return currentPos + Vector3.back + Vector3.left;
-            }
+            return currentPos + directionToVector[dir];
         }
         return Vector3.zero;
     }
@@ -388,42 +368,15 @@ public class MainAI : MonoBehaviour
         return false;
     }
 
-    void MoveAI(Actions action)
+    void MoveAI(Directions dir)
     {
-        Directions dir = (Directions)action;
         Vector3 currentPos = transform.position;
         int xPos = (int)currentPos.x;
         int zPos = (int)currentPos.z;
 
         if (CanMoveInDirection(dir, xPos, zPos))
         {
-            switch (dir)
-            {
-                case Directions.North:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.forward));
-                    break;
-                case Directions.South:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.back));
-                    break;
-                case Directions.West:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.left));
-                    break;
-                case Directions.East:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.right));
-                    break;
-                case Directions.NorthEast:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.forward + Vector3.right));
-                    break;
-                case Directions.SouthEast:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.back + Vector3.right));
-                    break;
-                case Directions.NorthWest:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.forward + Vector3.left));
-                    break;
-                case Directions.SouthWest:
-                    StartCoroutine(LerpFunction(currentPos, currentPos + Vector3.back + Vector3.left));
-                    break;
-            }
+            StartCoroutine(LerpFunction(currentPos, directionToVector[dir]));
         }
     }
 
@@ -446,4 +399,16 @@ public class MainAI : MonoBehaviour
         IsLerping = false;
         yield return null;
     }
+
+    Dictionary<Directions, Vector3> directionToVector = new()
+{
+        {Directions.North, Vector3.forward},
+        {Directions.South, Vector3.back },
+        {Directions.West, Vector3.left },
+        {Directions.East, Vector3.right },
+        {Directions.NorthEast, Vector3.forward + Vector3.right },
+        {Directions.SouthEast, Vector3.back + Vector3.right },
+        {Directions.NorthEast, Vector3.forward + Vector3.left },
+        {Directions.SouthWest, Vector3.back + Vector3.left }
+};
 }
