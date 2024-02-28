@@ -39,10 +39,10 @@ public class MainAI : MonoBehaviour
         /// </summary>
         public bool isBlocked;
         public int visited;
-        public int x, y;
+        public int x, z;
     }
     /// <summary>
-    /// The MainGrid holds true values if there is a block present on these coords, and false otherwise.
+    /// The MainGrid holds a grid of the GridItem struct.
     /// </summary>
     GridItem[,] MainGrid = new GridItem[9, 9];
 
@@ -66,7 +66,7 @@ public class MainAI : MonoBehaviour
                 MainGrid[x, y].isBlocked = false;
                 MainGrid[x, y].visited = -1;
                 MainGrid[x, y].x = x;
-                MainGrid[x, y].y = y;
+                MainGrid[x, y].z = y;
             }
         }
     }
@@ -123,6 +123,7 @@ public class MainAI : MonoBehaviour
         // determine whether it was a good choice
         Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
         newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
+        Debug.Log(TargetPath(0, 0));
 
         // add the new state to the Q table
         QTable.Add(newState);
@@ -209,43 +210,32 @@ public class MainAI : MonoBehaviour
     #region Feedback
     int DetermineChoiceOutcome(Vector3 currentPos, Vector3 newPos)
     {
+        int choiceOutcome = 0;
         int currentX = (int)currentPos.x;
         int currentZ = (int)currentPos.z;
 
-        int newX = (int)newPos.x;
-        int newZ = (int)newPos.z;
+        // get all the valid endpoints
+        List<Vector3> closestPreviousEdges = GetValidEndpoints();
 
-        int choiceOutcome;
-
-        // Calculate distances to each edge before and after the move
-        float distanceBefore = CalculateDistanceToClosestEdge(currentX, currentZ);
-        float distanceAfter = CalculateDistanceToClosestEdge(newX, newZ);
-
-        // Calculate how the move affects proximity to edges
-        float proximityChange = distanceBefore - distanceAfter;
-
-        // Assign outcome based on proximity change
-        if (proximityChange > 0)
+        // pathfind to all of them, then take the shortest path
+        // if there are multiple, consider all of them
+        List<int> pathLength = new();
+        for (int i = 0; i < closestPreviousEdges.Count; i++)
         {
-            // Good move: moved closer to closest edge
-            choiceOutcome = 1;
+            int endX = (int)closestPreviousEdges[i].x;
+            int endZ = (int)closestPreviousEdges[i].z;
+            pathLength.Add(TargetPath(endX, endZ));
         }
-        else if (proximityChange < 0)
-        {
-            // Bad move: moved away from closest edge
-            choiceOutcome = -1;
-        }
-        else
-        {
-            // Okay move: neither closer nor farther from closest edge
-            choiceOutcome = 0;
-        }
+
+        // then pathfind to the closest points again
+        // keep track of the change in distance
+        List<int> changeInDistance = new();
 
         return choiceOutcome;
     }
     #endregion
     #region Navigation to points
-    private void InitialSetup()
+    void InitialSetup()
     {
         for (int i = 0; i < MainGrid.GetLength(0); i++)
         {
@@ -257,7 +247,7 @@ public class MainAI : MonoBehaviour
         MainGrid[(int)transform.position.x, (int)transform.position.z].visited = 0;
     }
 
-    private void SetDistance()
+    void SetDistance()
     {
         InitialSetup();
 
@@ -270,39 +260,39 @@ public class MainAI : MonoBehaviour
             {
                 if (!obj.isBlocked && obj.visited == step - 1)
                 {
-                    TestEightDirections(obj.x, obj.y, step);
+                    TestEightDirections(obj.x, obj.z, step);
                 }
             }
         }
     }
 
-    List<Vector2> GetValidEndpoints()
+    List<Vector3> GetValidEndpoints()
     {
-        List<Vector2> endpoints = new();
+        List<Vector3> endpoints = new();
 
         // along the horizontal sides
-        for (int x = 0; x < 8; x++)
+        for (int x = 0; x < 9; x++)
         {
             if (!MainGrid[x, 8].isBlocked)
             {
-                endpoints.Add(new Vector2(x, 8));
+                endpoints.Add(new Vector3(x, 0, 8));
             }
             if (!MainGrid[x, 0].isBlocked)
             {
-                endpoints.Add(new Vector2(x, 0));
+                endpoints.Add(new Vector3(x, 0, 0));
             }
         }
         // along the vertical sides
         // from 1 to 7 to skip the corners (they got checked already)
-        for (int y = 1; y < 7; y++)
+        for (int y = 1; y < 8; y++)
         {
-            if (!MainGrid[1, y].isBlocked)
+            if (!MainGrid[0, y].isBlocked)
             {
-                endpoints.Add(new Vector2(0, y));
+                endpoints.Add(new Vector3(0, 0, y));
             }
-            if (!MainGrid[7, y].isBlocked)
+            if (!MainGrid[8, y].isBlocked)
             {
-                endpoints.Add(new Vector2(0, y));
+                endpoints.Add(new Vector3(8, 0, y));
             }
         }
 
@@ -314,16 +304,18 @@ public class MainAI : MonoBehaviour
         SetDistance();
 
         int step;
+        int x = endX;
+        int z = endZ;
         List<GridItem> path = new();
         List<GridItem> tempList = new();
 
         if (!MainGrid[endX, endZ].isBlocked && MainGrid[endX, endZ].visited > 0)
         {
-            tempList.Add(MainGrid[endX, endZ]);
-            step = MainGrid[endX, endZ].visited - 1;
+            path.Add(MainGrid[x, z]);
+            step = MainGrid[x, z].visited - 1;
         }
         else
-        {
+        { 
             return 1000;
         }
 
@@ -331,44 +323,42 @@ public class MainAI : MonoBehaviour
         {
             for (int i = 0; i < Enum.GetNames(typeof(Directions)).Length; i++)
             {
-                if (TestDirection(endX, endZ, step, (Directions)i))
+                if (TestDirection(x, z, step, (Directions)i))
                 {
-                    int tempX = endX + (int)directionToVector[(Directions)i].x;
-                    int tempZ = endZ + (int)directionToVector[(Directions)i].z;
+                    int tempX = x + (int)directionToVector[(Directions)i].x;
+                    int tempZ = z + (int)directionToVector[(Directions)i].z;
                     tempList.Add(MainGrid[tempX, tempZ]);
                 }
             }
 
-            Vector2 target = new(endX, endZ);
+            Vector3 target = new(endX, 0, endZ);
             GridItem tempObj = FindClosest(target, tempList);
             path.Add(tempObj);
-            endX = tempObj.x;
-            endZ = tempObj.y;
+            x = tempObj.x;
+            z = tempObj.z;
             tempList.Clear();
         }
-
-        path.Reverse();
         return path.Count;
     }
 
-    GridItem FindClosest(Vector2 targetLocation, List<GridItem> list)
+    GridItem FindClosest(Vector3 targetLocation, List<GridItem> list)
     {
         float currentDistance = 1000;
         int indexNumber = 0;
         for (int i = 0; i < list.Count; i++)
         {
-            Vector2 listItem = new(list[i].x, list[i].y);
+            Vector3 listItem = new(list[i].x, list[i].z);
 
-            if (Vector2.Distance(targetLocation, listItem) < currentDistance)
+            if (Vector3.Distance(targetLocation, listItem) < currentDistance)
             {
-                currentDistance = Vector2.Distance(targetLocation, listItem);
+                currentDistance = Vector3.Distance(targetLocation, listItem);
                 indexNumber = i;
             }
         }
         return list[indexNumber];
     }
 
-    bool TestDirection(int x, int y, int step, Directions dir)
+    bool TestDirection(int x, int z, int step, Directions dir)
     {
         int rows = MainGrid.GetLength(0);
         int columns = MainGrid.GetLength(1);
@@ -378,21 +368,22 @@ public class MainAI : MonoBehaviour
             switch (dir)
             {
                 case Directions.North:
-                    return y + 1 < columns && MainGrid[x, y + 1].isBlocked && MainGrid[x, y + 1].visited == step;
+                    return z + 1 < columns && !MainGrid[x, z + 1].isBlocked && MainGrid[x, z + 1].visited == step;
                 case Directions.South:
-                    return x + 1 < rows && MainGrid[x + 1, y].isBlocked && MainGrid[x + 1, y].visited == step;
+                    return z - 1 > -1 && !MainGrid[x, z - 1].isBlocked && MainGrid[x, z - 1].visited == step;
                 case Directions.West:
-                    return y - 1 > -1 && MainGrid[x, y - 1].isBlocked && MainGrid[x, y - 1].visited == step;
+                    return x - 1 > -1 && !MainGrid[x - 1, z].isBlocked && MainGrid[x - 1, z].visited == step;
                 case Directions.East:
-                    return x - 1 > -1 && MainGrid[x - 1, y].isBlocked && MainGrid[x - 1, y].visited == step;
+                    return x + 1 < rows && !MainGrid[x + 1, z].isBlocked && MainGrid[x + 1, z].visited == step;
+
                 case Directions.NorthEast:
-                    return y + 1 < columns && x + 1 < rows && MainGrid[x + 1, y + 1].isBlocked && MainGrid[x + 1, y + 1].visited == step;
+                    return z + 1 < columns && x + 1 < rows && !MainGrid[x + 1, z + 1].isBlocked && MainGrid[x + 1, z + 1].visited == step;
                 case Directions.SouthEast:
-                    return y - 1 > -1 && x + 1 < rows && MainGrid[x + 1, y - 1].isBlocked && MainGrid[x + 1, y - 1].visited == step;
+                    return z - 1 > -1 && x + 1 < rows && !MainGrid[x + 1, z - 1].isBlocked && MainGrid[x + 1, z - 1].visited == step;
                 case Directions.NorthWest:
-                    return y - 1 > -1 && x - 1 > -1 && MainGrid[x - 1, y - 1].isBlocked && MainGrid[x - 1, y - 1].visited == step;
+                    return z + 1 < columns && x - 1 > -1 && !MainGrid[x - 1, z + 1].isBlocked && MainGrid[x - 1, z + 1].visited == step;
                 case Directions.SouthWest:
-                    return y + 1 < columns && x - 1 > -1 && MainGrid[x - 1, y + 1].isBlocked && MainGrid[x - 1, y + 1].visited == step;
+                    return z - 1 > -1 && x - 1 > -1 && !MainGrid[x - 1, z - 1].isBlocked && MainGrid[x - 1, z - 1].visited == step;
             }
         }
         catch
@@ -402,27 +393,27 @@ public class MainAI : MonoBehaviour
         return false;
     }
 
-    void TestEightDirections(int x, int y, int step)
+    void TestEightDirections(int x, int z, int step)
     {
-        for (int direction = 1; direction <= 8; direction++)
+        for (int i = 0; i < 8; i++)
         {
-            TestDirection(x, y, -1, (Directions)direction);
+            if (TestDirection(x, z, -1, (Directions)i))
+            {
+                int tempX = x + (int)directionToVector[(Directions)i].x;
+                int tempZ = z + (int)directionToVector[(Directions)i].z;
+                SetVisited(tempX, tempZ, step);
+            }
+        }
+    }
+
+    void SetVisited(int x, int y, int step)
+    {
+        if (!MainGrid[x, y].isBlocked)
+        {
+            MainGrid[x, y].visited = step;
         }
     }
     #endregion
-    float CalculateDistanceToClosestEdge(int xPos, int zPos)
-    {
-        // the edges are at (0, 0) and (MainGrid.GetLength(0), MainGrid.GetLength(1))
-        float distanceToTopEdge = zPos;
-        float distanceToBottomEdge = MainGrid.GetLength(1) - zPos;
-        float distanceToLeftEdge = xPos;
-        float distanceToRightEdge = MainGrid.GetLength(0) - xPos;
-
-        // Find the minimum distance to any edge
-        float minDistance = Mathf.Min(distanceToTopEdge, distanceToBottomEdge, distanceToLeftEdge, distanceToRightEdge);
-
-        return minDistance;
-    }
     #region Block Analysis
     Vector3 SimulateMove(Directions dir, Vector3 currentPos)
     {
