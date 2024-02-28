@@ -1,10 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.UIElements;
 using Rand = UnityEngine.Random;
 
 
@@ -28,7 +26,7 @@ public class MainAI : MonoBehaviour
         /// <summary>
         /// -1, 0, and 1, with -1 being bad, 0 being okay, and 1 being good.
         /// </summary>
-        public int decisionOutcome;
+        public float decisionOutcome;
     }
     List<State> QTable = new();
 
@@ -124,7 +122,6 @@ public class MainAI : MonoBehaviour
         // determine whether it was a good choice
         Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
         newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
-        Debug.Log(TargetPath(0, 0));
 
         // add the new state to the Q table
         QTable.Add(newState);
@@ -137,7 +134,7 @@ public class MainAI : MonoBehaviour
         }
     }
 
-    #region Decision Making
+    #region Decision Making and Feedback
     Directions DecideAction(State state, int xPos, int zPos)
     {
         // Take a list of all possible actions
@@ -151,21 +148,15 @@ public class MainAI : MonoBehaviour
             {
                 if (qEntry.status.SequenceEqual(state.status))
                 {
-                    if (qEntry.decisionOutcome == 0)
+                    // Make sure the action is possible before adding it
+                    if (CanMoveInDirection(qEntry.decidedAction, xPos, zPos))
                     {
-                        // Make sure the action is possible before adding it
-                        if (CanMoveInDirection((Directions)qEntry.decidedAction, xPos, zPos))
+                        // Introduce a weight factor based on the decision outcome
+                        float weight = GetWeight(qEntry.decisionOutcome);
+
+                        // Add the action to the potential actions list based on its weight
+                        for (int i = 0; i < Mathf.CeilToInt(weight); i++)
                         {
-                            potentialActions.Add(qEntry.decidedAction);
-                        }
-                    }
-                    else if (qEntry.decisionOutcome == 1)
-                    {
-                        // Again, make sure the action is possible.
-                        // This time, the action is worth double, so add it twice.
-                        if (CanMoveInDirection((Directions)qEntry.decidedAction, xPos, zPos))
-                        {
-                            potentialActions.Add(qEntry.decidedAction);
                             potentialActions.Add(qEntry.decidedAction);
                         }
                     }
@@ -181,6 +172,22 @@ public class MainAI : MonoBehaviour
         // If no past decisions, choose a random action from the possible actions
         Debug.Log("random action chosen");
         return ChooseRandomAction(state.possibleActions);
+    }
+
+    float GetWeight(float decisionOutcome)
+    {
+        if (decisionOutcome >= 0.5f)
+        {
+            return decisionOutcome * 3; // Weight for good decisions
+        }
+        else if (decisionOutcome > -0.5f)
+        {
+            return decisionOutcome * 1.5f; // Weight for okay decisions
+        }
+        else
+        {
+            return decisionOutcome; // Weight for bad decisions
+        }
     }
 
     Directions ChooseRandomAction(List<bool> possibleActions)
@@ -207,36 +214,91 @@ public class MainAI : MonoBehaviour
             return Directions.North;
         }
     }
-    #endregion
-    #region Feedback
-    int DetermineChoiceOutcome(Vector3 currentPos, Vector3 newPos)
+
+    float DetermineChoiceOutcome(Vector3 currentPos, Vector3 newPos)
     {
-        int choiceOutcome = 0;
+        float choiceOutcome;
         int currentX = (int)currentPos.x;
         int currentZ = (int)currentPos.z;
-
-        // get all the valid endpoints
-        List<Vector3> closestPreviousEdges = GetValidEndpoints();
-
-        // pathfind to all of them, then take the shortest path
-        // if there are multiple, consider all of them
-        List<int> pathLength = new();
-        for (int i = 0; i < closestPreviousEdges.Count; i++)
+        int newX = (int)newPos.x;
+        int newZ = (int)newPos.z;
+        
+        // if we are at (4, 4) or the middle, return 0 immediately
+        // it's hard to tell if moving from the middle is a good move sometimes
+        if (currentX == 4 && currentZ == 4)
         {
-            int endX = (int)closestPreviousEdges[i].x;
-            int endZ = (int)closestPreviousEdges[i].z;
-            pathLength.Add(TargetPath(endX, endZ));
+            return 0;
         }
 
-        // then pathfind to the closest points again
-        // keep track of the change in distance
-        List<int> changeInDistance = new();
+        // get all the valid endpoints from the current position
+        List<Vector3> previousEdges = GetValidEndpoints();
 
+        // if there are no valid endpoints, terminate and end the game
+        if (previousEdges.Count == 0)
+        {
+            GameManager.Instance.GameEnd(false);
+        }
+
+        // pathfind to all of them, then store the distance to all the points
+        // the indexes will match
+        List<int> pathLength = new();
+        for (int i = 0; i < previousEdges.Count; i++)
+        {
+            int endX = (int)previousEdges[i].x;
+            int endZ = (int)previousEdges[i].z;
+            pathLength.Add(TargetPath(currentX, currentZ, endX, endZ));
+        }
+
+        // find the smallest endpoint distance
+        int minDistance = 1000;
+        for (int j = 0; j < previousEdges.Count; j++)
+        {
+            if (pathLength[j] < minDistance)
+            {
+                minDistance = pathLength[j];
+            }
+        }
+
+        // from the smallest endpoint distance find the endpoints with that distance
+        List<Vector3> closestEndpoints = new();
+        List<int> previousEndpointDistance = new();
+        for (int k = 0; k < previousEdges.Count; k++)
+        {
+            if (pathLength[k] == minDistance)
+            {
+                // add the endpoint that corresponds to this index
+                closestEndpoints.Add(previousEdges[k]);
+                previousEndpointDistance.Add(pathLength[k]);
+            }
+        }
+
+        // then pathfind to the closest points again using the new simulated position
+        // keep track of the change in distance
+        List<int> newEndpointDistance = new();
+        for (int m = 0; m < closestEndpoints.Count; m++)
+        {
+            int endX = (int)closestEndpoints[m].x;
+            int endZ = (int)closestEndpoints[m].z;
+            newEndpointDistance.Add(TargetPath(newX, newZ, endX, endZ));
+        }
+
+        // then store the changes in distance to all points
+        List<int> changeInDistance = new();
+        for (int n = 0; n < newEndpointDistance.Count; n++)
+        {
+            // make sure to do previous - new, so that a good value is indicated by positive
+            int delta = previousEndpointDistance[n] - newEndpointDistance[n];
+            changeInDistance.Add(delta);
+        }
+
+        // finally take the average of the change in distance list
+        choiceOutcome = (float)changeInDistance.Average();
+        choiceOutcome = Mathf.Clamp(choiceOutcome, -1, 1);
         return choiceOutcome;
     }
     #endregion
     #region Navigation to points
-    void InitialSetup()
+    void InitialSetup(int x, int z)
     {
         for (int i = 0; i < MainGrid.GetLength(0); i++)
         {
@@ -245,12 +307,12 @@ public class MainAI : MonoBehaviour
                 MainGrid[i, j].visited = -1;
             }
         }
-        MainGrid[(int)transform.position.x, (int)transform.position.z].visited = 0;
+        MainGrid[x, z].visited = 0;
     }
 
-    void SetDistance()
+    void SetDistance(int x, int z)
     {
-        InitialSetup();
+        InitialSetup(x, z);
 
         int rows = MainGrid.GetLength(0);
         int columns = MainGrid.GetLength(1);
@@ -300,9 +362,9 @@ public class MainAI : MonoBehaviour
         return endpoints;
     }
 
-    int TargetPath(int endX, int endZ)
+    int TargetPath(int startX, int startZ, int endX, int endZ)
     {
-        SetDistance();
+        SetDistance(startX, startZ);
 
         int step;
         int x = endX;
@@ -322,7 +384,7 @@ public class MainAI : MonoBehaviour
 
         for (; step > -1; step--)
         {
-            for (int i = 0; i < Enum.GetNames(typeof(Directions)).Length; i++)
+            for (int i = 0; i < 8; i++)
             {
                 if (TestDirection(x, z, step, (Directions)i))
                 {
@@ -339,6 +401,7 @@ public class MainAI : MonoBehaviour
             z = tempObj.z;
             tempList.Clear();
         }
+
         return path.Count;
     }
 
@@ -359,39 +422,23 @@ public class MainAI : MonoBehaviour
         return list[indexNumber];
     }
 
-    bool TestDirection(int x, int z, int step, Directions dir)
+    bool TestDirection(int xPos, int zPos, int step, Directions dir)
     {
         int rows = MainGrid.GetLength(0);
         int columns = MainGrid.GetLength(1);
-
-        try
+        return dir switch
         {
-            switch (dir)
-            {
-                case Directions.North:
-                    return z + 1 < columns && !MainGrid[x, z + 1].isBlocked && MainGrid[x, z + 1].visited == step;
-                case Directions.South:
-                    return z - 1 > -1 && !MainGrid[x, z - 1].isBlocked && MainGrid[x, z - 1].visited == step;
-                case Directions.West:
-                    return x - 1 > -1 && !MainGrid[x - 1, z].isBlocked && MainGrid[x - 1, z].visited == step;
-                case Directions.East:
-                    return x + 1 < rows && !MainGrid[x + 1, z].isBlocked && MainGrid[x + 1, z].visited == step;
+            Directions.North => zPos + 1 < columns && !MainGrid[xPos, zPos + 1].isBlocked && MainGrid[xPos, zPos + 1].visited == step,
+            Directions.South => zPos - 1 > -1 && !MainGrid[xPos, zPos - 1].isBlocked && MainGrid[xPos, zPos - 1].visited == step,
+            Directions.West => xPos - 1 > -1 && !MainGrid[xPos - 1, zPos].isBlocked && MainGrid[xPos - 1, zPos].visited == step,
+            Directions.East => xPos + 1 < rows && !MainGrid[xPos + 1, zPos].isBlocked && MainGrid[xPos + 1, zPos].visited == step,
 
-                case Directions.NorthEast:
-                    return z + 1 < columns && x + 1 < rows && !MainGrid[x + 1, z + 1].isBlocked && MainGrid[x + 1, z + 1].visited == step;
-                case Directions.SouthEast:
-                    return z - 1 > -1 && x + 1 < rows && !MainGrid[x + 1, z - 1].isBlocked && MainGrid[x + 1, z - 1].visited == step;
-                case Directions.NorthWest:
-                    return z + 1 < columns && x - 1 > -1 && !MainGrid[x - 1, z + 1].isBlocked && MainGrid[x - 1, z + 1].visited == step;
-                case Directions.SouthWest:
-                    return z - 1 > -1 && x - 1 > -1 && !MainGrid[x - 1, z - 1].isBlocked && MainGrid[x - 1, z - 1].visited == step;
-            }
-        }
-        catch
-        {
-            return false;
-        }
-        return false;
+            Directions.NorthEast => zPos + 1 < columns && xPos + 1 < rows && !MainGrid[xPos + 1, zPos + 1].isBlocked && MainGrid[xPos + 1, zPos + 1].visited == step,
+            Directions.SouthEast => zPos - 1 > -1 && xPos + 1 < rows && !MainGrid[xPos + 1, zPos - 1].isBlocked && MainGrid[xPos + 1, zPos - 1].visited == step,
+            Directions.NorthWest => zPos + 1 < columns && xPos - 1 > -1 && !MainGrid[xPos - 1, zPos + 1].isBlocked && MainGrid[xPos - 1, zPos + 1].visited == step,
+            Directions.SouthWest => zPos - 1 > -1 && xPos - 1 > -1 && !MainGrid[xPos - 1, zPos - 1].isBlocked && MainGrid[xPos - 1, zPos - 1].visited == step,
+            _ => false,
+        };
     }
 
     void TestEightDirections(int x, int z, int step)
@@ -575,7 +622,7 @@ public class MainAI : MonoBehaviour
         yield return null;
     }
     #endregion
-    Dictionary<Directions, Vector3> directionToVector = new()
+    readonly Dictionary<Directions, Vector3> directionToVector = new()
 {
         {Directions.North, Vector3.forward},
         {Directions.South, Vector3.back },
