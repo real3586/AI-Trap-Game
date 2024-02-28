@@ -54,6 +54,7 @@ public class MainAI : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        ResetGrid();
     }
 
     public void ResetGrid()
