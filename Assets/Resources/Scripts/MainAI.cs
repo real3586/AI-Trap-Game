@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Rand = UnityEngine.Random;
 
 
@@ -28,12 +30,21 @@ public class MainAI : MonoBehaviour
         /// </summary>
         public int decisionOutcome;
     }
+    List<State> QTable = new();
 
+    struct GridItem
+    {
+        /// <summary>
+        /// Does this square have a block?
+        /// </summary>
+        public bool isBlocked;
+        public int visited;
+        public int x, y;
+    }
     /// <summary>
     /// The MainGrid holds true values if there is a block present on these coords, and false otherwise.
     /// </summary>
-    public bool[,] MainGrid = new bool[9, 9];
-    List<State> QTable = new();
+    GridItem[,] MainGrid = new GridItem[9, 9];
 
     public bool IsLerping { get; private set; }
 
@@ -52,7 +63,10 @@ public class MainAI : MonoBehaviour
         {
             for (int y = 0; y < MainGrid.GetLength(1); y++)
             {
-                MainGrid[x, y] = false;
+                MainGrid[x, y].isBlocked = false;
+                MainGrid[x, y].visited = -1;
+                MainGrid[x, y].x = x;
+                MainGrid[x, y].y = y;
             }
         }
     }
@@ -121,6 +135,7 @@ public class MainAI : MonoBehaviour
         }
     }
 
+    #region Decision Making
     Directions DecideAction(State state, int xPos, int zPos)
     {
         // Take a list of all possible actions
@@ -190,7 +205,8 @@ public class MainAI : MonoBehaviour
             return Directions.North;
         }
     }
-
+    #endregion
+    #region Feedback
     int DetermineChoiceOutcome(Vector3 currentPos, Vector3 newPos)
     {
         int currentX = (int)currentPos.x;
@@ -227,7 +243,173 @@ public class MainAI : MonoBehaviour
 
         return choiceOutcome;
     }
+    #endregion
+    #region Navigation to points
+    private void InitialSetup()
+    {
+        for (int i = 0; i < MainGrid.GetLength(0); i++)
+        {
+            for (int j = 0; j < MainGrid.GetLength(1); j++)
+            {
+                MainGrid[i, j].visited = -1;
+            }
+        }
+        MainGrid[(int)transform.position.x, (int)transform.position.z].visited = 0;
+    }
 
+    private void SetDistance()
+    {
+        InitialSetup();
+
+        int rows = MainGrid.GetLength(0);
+        int columns = MainGrid.GetLength(1);
+
+        for (int step = 1; step < rows * columns; step++)
+        {
+            foreach (GridItem obj in MainGrid)
+            {
+                if (!obj.isBlocked && obj.visited == step - 1)
+                {
+                    TestEightDirections(obj.x, obj.y, step);
+                }
+            }
+        }
+    }
+
+    List<Vector2> GetValidEndpoints()
+    {
+        List<Vector2> endpoints = new();
+
+        // along the horizontal sides
+        for (int x = 0; x < 8; x++)
+        {
+            if (!MainGrid[x, 8].isBlocked)
+            {
+                endpoints.Add(new Vector2(x, 8));
+            }
+            if (!MainGrid[x, 0].isBlocked)
+            {
+                endpoints.Add(new Vector2(x, 0));
+            }
+        }
+        // along the vertical sides
+        // from 1 to 7 to skip the corners (they got checked already)
+        for (int y = 1; y < 7; y++)
+        {
+            if (!MainGrid[1, y].isBlocked)
+            {
+                endpoints.Add(new Vector2(0, y));
+            }
+            if (!MainGrid[7, y].isBlocked)
+            {
+                endpoints.Add(new Vector2(0, y));
+            }
+        }
+
+        return endpoints;
+    }
+
+    int TargetPath(int endX, int endZ)
+    {
+        SetDistance();
+
+        int step;
+        List<GridItem> path = new();
+        List<GridItem> tempList = new();
+
+        if (!MainGrid[endX, endZ].isBlocked && MainGrid[endX, endZ].visited > 0)
+        {
+            tempList.Add(MainGrid[endX, endZ]);
+            step = MainGrid[endX, endZ].visited - 1;
+        }
+        else
+        {
+            return 1000;
+        }
+
+        for (; step > -1; step--)
+        {
+            for (int i = 0; i < Enum.GetNames(typeof(Directions)).Length; i++)
+            {
+                if (TestDirection(endX, endZ, step, (Directions)i))
+                {
+                    int tempX = endX + (int)directionToVector[(Directions)i].x;
+                    int tempZ = endZ + (int)directionToVector[(Directions)i].z;
+                    tempList.Add(MainGrid[tempX, tempZ]);
+                }
+            }
+
+            Vector2 target = new(endX, endZ);
+            GridItem tempObj = FindClosest(target, tempList);
+            path.Add(tempObj);
+            endX = tempObj.x;
+            endZ = tempObj.y;
+            tempList.Clear();
+        }
+
+        path.Reverse();
+        return path.Count;
+    }
+
+    GridItem FindClosest(Vector2 targetLocation, List<GridItem> list)
+    {
+        float currentDistance = 1000;
+        int indexNumber = 0;
+        for (int i = 0; i < list.Count; i++)
+        {
+            Vector2 listItem = new(list[i].x, list[i].y);
+
+            if (Vector2.Distance(targetLocation, listItem) < currentDistance)
+            {
+                currentDistance = Vector2.Distance(targetLocation, listItem);
+                indexNumber = i;
+            }
+        }
+        return list[indexNumber];
+    }
+
+    bool TestDirection(int x, int y, int step, Directions dir)
+    {
+        int rows = MainGrid.GetLength(0);
+        int columns = MainGrid.GetLength(1);
+
+        try
+        {
+            switch (dir)
+            {
+                case Directions.North:
+                    return y + 1 < columns && MainGrid[x, y + 1].isBlocked && MainGrid[x, y + 1].visited == step;
+                case Directions.South:
+                    return x + 1 < rows && MainGrid[x + 1, y].isBlocked && MainGrid[x + 1, y].visited == step;
+                case Directions.West:
+                    return y - 1 > -1 && MainGrid[x, y - 1].isBlocked && MainGrid[x, y - 1].visited == step;
+                case Directions.East:
+                    return x - 1 > -1 && MainGrid[x - 1, y].isBlocked && MainGrid[x - 1, y].visited == step;
+                case Directions.NorthEast:
+                    return y + 1 < columns && x + 1 < rows && MainGrid[x + 1, y + 1].isBlocked && MainGrid[x + 1, y + 1].visited == step;
+                case Directions.SouthEast:
+                    return y - 1 > -1 && x + 1 < rows && MainGrid[x + 1, y - 1].isBlocked && MainGrid[x + 1, y - 1].visited == step;
+                case Directions.NorthWest:
+                    return y - 1 > -1 && x - 1 > -1 && MainGrid[x - 1, y - 1].isBlocked && MainGrid[x - 1, y - 1].visited == step;
+                case Directions.SouthWest:
+                    return y + 1 < columns && x - 1 > -1 && MainGrid[x - 1, y + 1].isBlocked && MainGrid[x - 1, y + 1].visited == step;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+        return false;
+    }
+
+    void TestEightDirections(int x, int y, int step)
+    {
+        for (int direction = 1; direction <= 8; direction++)
+        {
+            TestDirection(x, y, -1, (Directions)direction);
+        }
+    }
+    #endregion
     float CalculateDistanceToClosestEdge(int xPos, int zPos)
     {
         // the edges are at (0, 0) and (MainGrid.GetLength(0), MainGrid.GetLength(1))
@@ -241,7 +423,7 @@ public class MainAI : MonoBehaviour
 
         return minDistance;
     }
-
+    #region Block Analysis
     Vector3 SimulateMove(Directions dir, Vector3 currentPos)
     {
         // uses the same code as MoveAI, but just returns a Vector3 instead of moving anything
@@ -258,11 +440,11 @@ public class MainAI : MonoBehaviour
     public void AddBlock(int x, int y)
     {
         // if there is already a block don't do anything
-        if (MainGrid[x, y] == true)
+        if (MainGrid[x, y].isBlocked == true)
         {
             return;
         }
-        MainGrid[x, y] = true;
+        MainGrid[x, y].isBlocked = true;
     }
 
     List<int> DetectBlocks(float xPos, float zPos)
@@ -276,7 +458,7 @@ public class MainAI : MonoBehaviour
             {
                 // if true, a square is there (blocked)
                 // if not, continue
-                if (MainGrid[x, y])
+                if (MainGrid[x, y].isBlocked)
                 {
                     // check where the block is relative to the agent
                     // agent will learn to avoid directions with large amounts of blocks
@@ -308,7 +490,8 @@ public class MainAI : MonoBehaviour
 
         return ints;
     }
-
+    #endregion
+    #region Moving
     /// <summary>
     /// Use this function to check whether or not AI can move in this direction.
     /// </summary>
@@ -321,16 +504,16 @@ public class MainAI : MonoBehaviour
             return dir switch
             {
                 // "straight" directions
-                Directions.North => !MainGrid[xPos, zPos + 1],
-                Directions.South => !MainGrid[xPos, zPos - 1],
-                Directions.West => !MainGrid[xPos - 1, zPos],
-                Directions.East => !MainGrid[xPos + 1, zPos],
+                Directions.North => !MainGrid[xPos, zPos + 1].isBlocked,
+                Directions.South => !MainGrid[xPos, zPos - 1].isBlocked,
+                Directions.West => !MainGrid[xPos - 1, zPos].isBlocked,
+                Directions.East => !MainGrid[xPos + 1, zPos].isBlocked,
 
                 // diagonal directions
-                Directions.NorthEast => !MainGrid[xPos + 1, zPos + 1] && (!MainGrid[xPos + 1, zPos] || !MainGrid[xPos, zPos + 1]),
-                Directions.SouthEast => !MainGrid[xPos + 1, zPos - 1] && (!MainGrid[xPos + 1, zPos] || !MainGrid[xPos, zPos - 1]),
-                Directions.NorthWest => !MainGrid[xPos - 1, zPos + 1] && (!MainGrid[xPos - 1, zPos] || !MainGrid[xPos, zPos + 1]),
-                Directions.SouthWest => !MainGrid[xPos - 1, zPos - 1] && (!MainGrid[xPos - 1, zPos] || !MainGrid[xPos, zPos - 1]),
+                Directions.NorthEast => !MainGrid[xPos + 1, zPos + 1].isBlocked && (!MainGrid[xPos + 1, zPos].isBlocked || !MainGrid[xPos, zPos + 1].isBlocked),
+                Directions.SouthEast => !MainGrid[xPos + 1, zPos - 1].isBlocked && (!MainGrid[xPos + 1, zPos].isBlocked || !MainGrid[xPos, zPos - 1].isBlocked),
+                Directions.NorthWest => !MainGrid[xPos - 1, zPos + 1].isBlocked && (!MainGrid[xPos - 1, zPos].isBlocked || !MainGrid[xPos, zPos + 1].isBlocked),
+                Directions.SouthWest => !MainGrid[xPos - 1, zPos - 1].isBlocked && (!MainGrid[xPos - 1, zPos].isBlocked || !MainGrid[xPos, zPos - 1].isBlocked),
                 _ => false,
             };
         }
@@ -376,7 +559,7 @@ public class MainAI : MonoBehaviour
 
         if (CanMoveInDirection(dir, xPos, zPos))
         {
-            StartCoroutine(LerpFunction(currentPos, directionToVector[dir]));
+            StartCoroutine(LerpFunction(currentPos, currentPos + directionToVector[dir]));
         }
     }
 
@@ -399,7 +582,7 @@ public class MainAI : MonoBehaviour
         IsLerping = false;
         yield return null;
     }
-
+    #endregion
     Dictionary<Directions, Vector3> directionToVector = new()
 {
         {Directions.North, Vector3.forward},
@@ -408,7 +591,7 @@ public class MainAI : MonoBehaviour
         {Directions.East, Vector3.right },
         {Directions.NorthEast, Vector3.forward + Vector3.right },
         {Directions.SouthEast, Vector3.back + Vector3.right },
-        {Directions.NorthEast, Vector3.forward + Vector3.left },
+        {Directions.NorthWest, Vector3.forward + Vector3.left },
         {Directions.SouthWest, Vector3.back + Vector3.left }
 };
 }
