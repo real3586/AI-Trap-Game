@@ -7,13 +7,13 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    Coroutine mainSequence;
+    Coroutine mainSequence, blockSequence;
     [SerializeField] GameObject mainAI;
 
     bool isPlacing;
     bool mouseDown;
     RaycastHit hitInfo = new();
-    GameObject newBlock;
+    [SerializeField] GameObject newBlock;
     [SerializeField] GameObject blockPrefab;
     [SerializeField] GameObject placeManager;
 
@@ -42,18 +42,17 @@ public class GameManager : MonoBehaviour
         Instance = this;
 
         placeManager.SetActive(false);
+        blockSequence = StartCoroutine(PlaceBlock());
+        StopCoroutine(blockSequence);
+        Destroy(newBlock);
+
+        mainSequence = StartCoroutine(MainSequence());
+        StopCoroutine(mainSequence);
     }
 
     public void StartGame()
     {
-        if (mainSequence == null)
-        {
-            mainSequence = StartCoroutine(MainSequence());
-        }
-        else
-        {
-            StartCoroutine(MainSequence());
-        }
+        StartCoroutine(MainSequence());
     }
 
     private void Update()
@@ -83,9 +82,9 @@ public class GameManager : MonoBehaviour
         {
             hitInfoX = 0;
         }
-        else if (hitX > 19)
+        else if (hitX > 8)
         {
-            hitInfoX = 19;
+            hitInfoX = 8;
         }
         else
         {
@@ -97,25 +96,33 @@ public class GameManager : MonoBehaviour
         {
             hitInfoZ = 0;
         }
-        else if (hitZ > 14)
+        else if (hitZ > 8)
         {
-            hitInfoZ = 14;
+            hitInfoZ = 8;
         }
         else
         {
             hitInfoZ = Mathf.Round(hitZ);
         }
-        i.transform.position = new Vector3(hitInfoX, 1, hitInfoZ);
+        try
+        {
+            i.transform.position = new Vector3(hitInfoX, 1, hitInfoZ);
+        }
+        catch
+        {
+            return;
+        }
     }
 
     public void GameEnd(bool didAIWin)
     {
-        StopCoroutine(mainSequence);
+        StopAllCoroutines();
+
+        Destroy(newBlock);
 
         panel.SetActive(true);
         winAndLoseStuff.SetActive(true);
 
-        Destroy(newBlock);
         if (didAIWin)
         {
             outcomeText.text = "You Lost!";
@@ -128,7 +135,7 @@ public class GameManager : MonoBehaviour
 
             currentScore += Vector2.right;
         }
-        scoreText.text = "Score: " + currentScore.x + "-" + currentScore.y;
+        scoreText.text = "Score: " + currentScore.x + "-" + currentScore.y;        
     }
 
     public void ResetGame()
@@ -153,6 +160,7 @@ public class GameManager : MonoBehaviour
         placeManager.SetActive(true);
         Ray ray;
 
+        Destroy(newBlock);
         newBlock = Instantiate(blockPrefab, allBlocks);
 
         ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -189,11 +197,13 @@ public class GameManager : MonoBehaviour
         newBlock.GetComponent<BoxCollider>().enabled = true;
         newBlock.transform.localScale = Vector3.one * 0.75f;
         newBlock.tag = "Block";
+
         isPlacing = false;
         placeManager.SetActive(false);
 
         // update the grid of the MainAI to contain a block
         MainAI.Instance.AddBlock((int)newBlock.transform.position.x, (int)newBlock.transform.position.z);
+        newBlock = null;
     }
 
     bool DidHitFloor()

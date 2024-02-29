@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using UnityEngine;
 using Rand = UnityEngine.Random;
 
@@ -42,9 +43,12 @@ public class MainAI : MonoBehaviour
     /// <summary>
     /// The MainGrid holds a grid of the GridItem struct.
     /// </summary>
-    GridItem[,] MainGrid = new GridItem[9, 9];
+    readonly GridItem[,] MainGrid = new GridItem[9, 9];
 
     public bool IsLerping { get; private set; }
+
+    [SerializeField] TextMeshProUGUI decisionText, outcomeText, dataPointsText, randomText;
+    bool wasRandomAction;
 
     enum Directions { North, South, West, East, NorthEast, SouthEast, NorthWest, SouthWest }
     enum States { NortheastBlocked, NorthwestBlocked, SoutheastBlocked, SouthwestBlocked }
@@ -117,7 +121,6 @@ public class MainAI : MonoBehaviour
         newState.decidedAction = DecideAction(newState, xPos, zPos);
         Vector3 currentPosition = transform.position;
         MoveAI(newState.decidedAction);
-        Debug.Log(newState.decidedAction);
 
         // determine whether it was a good choice
         Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
@@ -126,12 +129,29 @@ public class MainAI : MonoBehaviour
         // add the new state to the Q table
         QTable.Add(newState);
 
+        // update what the user sees
+        UIUpdate(newState.decidedAction, newState.decisionOutcome);
+
         // finally check if the AI is on a winning square
         if (CheckWin((int)hypotheticalPos.x, (int)hypotheticalPos.z))
         {
             GameManager.Instance.GameEnd(true);
             return;
         }
+    }
+
+    void UIUpdate(Directions decision, float outcome)
+    {
+        // display the decided action and the outcome
+        decisionText.text = "Latest Decision: Moved " + decision.ToString();
+        outcomeText.text = "Outcome: " + outcome.ToString("F3"); // 3 decimal places
+
+        // display the amount of data points it has
+        dataPointsText.text = "Current Data Points: " + QTable.Count;
+
+        // display whether it was a random action
+        string randomAction = wasRandomAction ? "Yes" : "No";
+        randomText.text = "Was Random: " + randomAction;
     }
 
     #region Decision Making and Feedback
@@ -165,12 +185,13 @@ public class MainAI : MonoBehaviour
             if (potentialActions.Count > 0)
             {
                 int randomIndex = Rand.Range(0, potentialActions.Count - 1);
+                wasRandomAction = false;
                 return potentialActions[randomIndex];
             }
         }
 
         // If no past decisions, choose a random action from the possible actions
-        Debug.Log("random action chosen");
+        wasRandomAction = true;
         return ChooseRandomAction(state.possibleActions);
     }
 
@@ -232,6 +253,15 @@ public class MainAI : MonoBehaviour
 
         // get all the valid endpoints from the current position
         List<Vector3> previousEdges = GetValidEndpoints();
+
+        // by default if the result is an endpoint it was a good move
+        for (int i = 0; i < previousEdges.Count; i++)
+        {
+            if (newPos == previousEdges[i])
+            {
+                return 1;
+            }
+        }
 
         // if there are no valid endpoints, terminate and end the game
         if (previousEdges.Count == 0)
@@ -338,11 +368,11 @@ public class MainAI : MonoBehaviour
         {
             if (!MainGrid[x, 8].isBlocked)
             {
-                endpoints.Add(new Vector3(x, 0, 8));
+                endpoints.Add(new Vector3(x, 1, 8));
             }
             if (!MainGrid[x, 0].isBlocked)
             {
-                endpoints.Add(new Vector3(x, 0, 0));
+                endpoints.Add(new Vector3(x, 1, 0));
             }
         }
         // along the vertical sides
@@ -351,11 +381,11 @@ public class MainAI : MonoBehaviour
         {
             if (!MainGrid[0, y].isBlocked)
             {
-                endpoints.Add(new Vector3(0, 0, y));
+                endpoints.Add(new Vector3(0, 1, y));
             }
             if (!MainGrid[8, y].isBlocked)
             {
-                endpoints.Add(new Vector3(8, 0, y));
+                endpoints.Add(new Vector3(8, 1, y));
             }
         }
 
