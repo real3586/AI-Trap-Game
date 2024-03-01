@@ -4,8 +4,7 @@ using UnityEngine;
 
 public class PlayButton : MonoBehaviour
 {
-    [SerializeField] GameObject gameStuff;
-    [SerializeField] GameObject menuStuff;
+    [SerializeField] GameObject gameStuff, menuStuff, optionsButton;
     [SerializeField] GameObject panel;
 
     private void Awake()
@@ -22,7 +21,6 @@ public class PlayButton : MonoBehaviour
 
         // make the gamestuff appear
         gameStuff.SetActive(true);
-
-        GameManager.Instance.StartGame();
+        optionsButton.SetActive(true);
     }
 }

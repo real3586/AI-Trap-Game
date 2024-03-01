@@ -7,7 +7,6 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    Coroutine mainSequence, blockSequence;
     [SerializeField] GameObject mainAI;
 
     bool isPlacing;
@@ -42,15 +41,9 @@ public class GameManager : MonoBehaviour
         Instance = this;
 
         placeManager.SetActive(false);
-        blockSequence = StartCoroutine(PlaceBlock());
-        StopCoroutine(blockSequence);
-        Destroy(newBlock);
-
-        mainSequence = StartCoroutine(MainSequence());
-        StopCoroutine(mainSequence);
     }
 
-    public void StartGame()
+    public void RunSequence()
     {
         StartCoroutine(MainSequence());
     }
@@ -62,15 +55,12 @@ public class GameManager : MonoBehaviour
 
     IEnumerator MainSequence()
     {
-        yield return new WaitForSeconds(1f);
+        yield return new WaitForSeconds(0.25f);
 
-        while (true)
-        {
-            yield return StartCoroutine(PlaceBlock());
-            yield return new WaitForSeconds(0.5f);
+        yield return StartCoroutine(PlaceBlock());
+        yield return new WaitForSeconds(0.5f);
 
-            MainAI.Instance.AISequence();
-        }
+        MainAI.Instance.AISequence();
     }
 
     // code from block defense lol

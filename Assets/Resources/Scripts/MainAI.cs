@@ -74,6 +74,11 @@ public class MainAI : MonoBehaviour
         }
     }
 
+    public void ClearAI()
+    {
+        QTable.Clear();
+    }
+
     public void AISequence()
     {
         int xPos = (int)transform.position.x;
