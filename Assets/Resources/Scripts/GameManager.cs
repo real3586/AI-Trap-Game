@@ -32,12 +32,6 @@ public class GameManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance != null)
-        {
-            Destroy(gameObject);
-            return;
-        }
-
         Instance = this;
 
         placeManager.SetActive(false);
@@ -45,6 +39,10 @@ public class GameManager : MonoBehaviour
 
     public void RunSequence()
     {
+        if (isPlacing)
+        {
+            return;
+        }
         StartCoroutine(MainSequence());
     }
 
@@ -110,8 +108,7 @@ public class GameManager : MonoBehaviour
 
         Destroy(newBlock);
 
-        panel.SetActive(true);
-        winAndLoseStuff.SetActive(true);
+        ActiveManager.Instance.GameEnd();
 
         if (didAIWin)
         {
@@ -130,8 +127,7 @@ public class GameManager : MonoBehaviour
 
     public void ResetGame()
     {
-        panel.SetActive(false);
-        winAndLoseStuff.SetActive(false);
+        ActiveManager.Instance.PlayGame();
 
         mainAI.transform.position = new Vector3(4, 1, 4);
         MainAI.Instance.ResetGrid();
@@ -140,8 +136,6 @@ public class GameManager : MonoBehaviour
         {
             Destroy(allBlocks.GetChild(i).gameObject);
         }
-
-        StartCoroutine(MainSequence());
     }
 
     IEnumerator PlaceBlock()
