@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 using Rand = UnityEngine.Random;
 
 
@@ -48,6 +49,8 @@ public class MainAI : MonoBehaviour
     public bool IsLerping { get; private set; }
 
     [SerializeField] TextMeshProUGUI decisionText, outcomeText, dataPointsText, randomText;
+    [SerializeField] GameObject arrow, userModeStuff;
+    [SerializeField] Button getBlockButton;
     bool wasRandomAction;
 
     enum Directions { North, South, West, East, NorthEast, SouthEast, NorthWest, SouthWest }
@@ -79,7 +82,7 @@ public class MainAI : MonoBehaviour
         QTable.Clear();
     }
 
-    public void AISequence()
+    public IEnumerator AISequence()
     {
         int xPos = (int)transform.position.x;
         int zPos = (int)transform.position.z;
@@ -119,7 +122,7 @@ public class MainAI : MonoBehaviour
         if (possibleMoves.All(value => value == false))
         {
             GameManager.Instance.GameEnd(false);
-            return;
+            yield break;
         }
 
         // decide the action based on the state and given actions
@@ -127,10 +130,35 @@ public class MainAI : MonoBehaviour
         Vector3 currentPosition = transform.position;
         MoveAI(newState.decidedAction);
 
-        // determine whether it was a good choice
-        Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
-        newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
+        // set the arrow position
+        arrow.SetActive(true);
+        arrow.transform.SetPositionAndRotation(transform.position + Vector3.up,
+            Quaternion.Euler(0, directionToRotation[newState.decidedAction], 0));
 
+        // shift the arrow a little forward
+        arrow.transform.position += arrow.transform.forward * MathF.Sqrt(2) / 2;
+
+        Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
+        if (!GameManager.Instance.isUserMode)
+        {
+            // determine whether it was a good choice
+            newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
+        }
+        else
+        {
+            // disable new blocks
+            getBlockButton.gameObject.SetActive(false);
+            userModeStuff.SetActive(true);
+
+            // wait for the user to provide feedback
+            yield return new WaitUntil(() => GameManager.Instance.UserProvidedFeedback);
+            GameManager.Instance.UserProvidedFeedback = false;
+
+            // then reset everything
+            getBlockButton.gameObject.SetActive(true);
+            newState.decisionOutcome = GameManager.Instance.DecisionOutcome;
+            userModeStuff.SetActive(false);
+        }
         // add the new state to the Q table
         QTable.Add(newState);
 
@@ -141,8 +169,10 @@ public class MainAI : MonoBehaviour
         if (CheckWin((int)hypotheticalPos.x, (int)hypotheticalPos.z))
         {
             GameManager.Instance.GameEnd(true);
-            return;
+            yield break;
         }
+
+        yield return null;
     }
 
     void UIUpdate(Directions decision, float outcome)
@@ -157,6 +187,13 @@ public class MainAI : MonoBehaviour
         // display whether it was a random action
         string randomAction = wasRandomAction ? "Yes" : "No";
         randomText.text = "Was Random: " + randomAction;
+    }
+
+    public void ResetTextFields()
+    {
+        decisionText.text = "Latest Decision: ";
+        randomText.text = "Was Random: ";
+        outcomeText.text = "Outcome: ";
     }
 
     #region Decision Making and Feedback
@@ -658,7 +695,7 @@ public class MainAI : MonoBehaviour
     }
     #endregion
     readonly Dictionary<Directions, Vector3> directionToVector = new()
-{
+    {
         {Directions.North, Vector3.forward},
         {Directions.South, Vector3.back },
         {Directions.West, Vector3.left },
@@ -667,5 +704,16 @@ public class MainAI : MonoBehaviour
         {Directions.SouthEast, Vector3.back + Vector3.right },
         {Directions.NorthWest, Vector3.forward + Vector3.left },
         {Directions.SouthWest, Vector3.back + Vector3.left }
-};
+    };
+    readonly Dictionary<Directions, float> directionToRotation = new()
+    {
+        {Directions.North, 0},
+        {Directions.South, 180 },
+        {Directions.West, 270 },
+        {Directions.East, 90 },
+        {Directions.NorthEast, 45 },
+        {Directions.SouthEast, 135 },
+        {Directions.NorthWest, 315 },
+        {Directions.SouthWest, 225 }
+    };
 }

@@ -11,6 +11,9 @@ public class GameManager : MonoBehaviour
 
     bool isPlacing;
     bool mouseDown;
+    public bool isUserMode;
+    public bool UserProvidedFeedback { get; set; }
+    public float DecisionOutcome { get; set; }
     RaycastHit hitInfo = new();
     [SerializeField] GameObject newBlock;
     [SerializeField] GameObject blockPrefab;
@@ -57,8 +60,7 @@ public class GameManager : MonoBehaviour
 
         yield return StartCoroutine(PlaceBlock());
         yield return new WaitForSeconds(0.5f);
-
-        MainAI.Instance.AISequence();
+        StartCoroutine(MainAI.Instance.AISequence());
     }
 
     // code from block defense lol
@@ -136,6 +138,8 @@ public class GameManager : MonoBehaviour
         {
             Destroy(allBlocks.GetChild(i).gameObject);
         }
+
+        UserProvidedFeedback = false;
     }
 
     IEnumerator PlaceBlock()

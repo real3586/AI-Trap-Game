@@ -8,7 +8,7 @@ public class ActiveManager : MonoBehaviour
     public static ActiveManager Instance;
 
     [SerializeField] GameObject optionsButton, optionsStuff, panel, gameStuff, 
-        menuStuff, winAndLose, playOptions, arrowObject;
+        menuStuff, winAndLose, playOptions, arrowObject, userModeStuff;
     [SerializeField] TextMeshProUGUI dataPointsText;
 
     private void Awake()
@@ -22,6 +22,8 @@ public class ActiveManager : MonoBehaviour
         menuStuff.SetActive(true);
         winAndLose.SetActive(false);
         playOptions.SetActive(false);
+        userModeStuff.SetActive(false);
+        arrowObject.SetActive(false);
     }
 
     public void EscapeOptions()
@@ -35,6 +37,9 @@ public class ActiveManager : MonoBehaviour
         menuStuff.SetActive(false);
         playOptions.SetActive(true);
         winAndLose.SetActive(false);
+        gameStuff.SetActive(false);
+        arrowObject.SetActive(false);
+        optionsButton.SetActive(false);
     }
 
     public void PlayClassic()
@@ -43,11 +48,23 @@ public class ActiveManager : MonoBehaviour
         panel.SetActive(false);
         playOptions.SetActive(false);        
         optionsButton.SetActive(true);
+        arrowObject.SetActive(false);
+
+        GameManager.Instance.isUserMode = false;
+        MainAI.Instance.ResetTextFields();
     }
 
     public void PlayUser()
     {
+        arrowObject.SetActive(false);
+        userModeStuff.SetActive(false);
+        gameStuff.SetActive(true);
+        panel.SetActive(false);
+        playOptions.SetActive(false);
+        optionsButton.SetActive(true);
 
+        GameManager.Instance.isUserMode = true;
+        MainAI.Instance.ResetTextFields();
     }
 
     public void ClearAI()
