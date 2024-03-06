@@ -18,4 +18,20 @@ public class BlockedSquare : MonoBehaviour
         yield return new WaitForSecondsRealtime(0.15f);
         GetComponent<MeshRenderer>().material = green;
     }
+
+    public void OnMouseDown()
+    {
+        if (!GameManager.Instance.IsAnalysisMode)
+        {
+            return;
+        }
+        else
+        {
+            ActiveManager.Instance.SuperAnalysis();
+
+            int xPos = (int)transform.position.x;
+            int zPos = (int)transform.position.z;
+            GameManager.Instance.Analyze(xPos, zPos);
+        }
+    }
 }

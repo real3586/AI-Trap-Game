@@ -8,7 +8,6 @@ public class OptionsButton : MonoBehaviour
 
     public void OnClick()
     {
-        panel.SetActive(true);
-        optionsStuff.SetActive(true);
+        ActiveManager.Instance.DisplayOptions();
     }
 }

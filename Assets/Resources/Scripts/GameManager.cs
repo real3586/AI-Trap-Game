@@ -13,11 +13,10 @@ public class GameManager : MonoBehaviour
     bool mouseDown;
     public bool isUserMode;
     public bool UserProvidedFeedback { get; set; }
+    public bool IsAnalysisMode { get; set; }
     public float DecisionOutcome { get; set; }
     RaycastHit hitInfo = new();
-    [SerializeField] GameObject newBlock;
-    [SerializeField] GameObject blockPrefab;
-    [SerializeField] GameObject placeManager;
+    [SerializeField] GameObject newBlock, blockPrefab, placeManager, blockHighlight;
 
     [SerializeField] Transform allBlocks;
 
@@ -27,6 +26,8 @@ public class GameManager : MonoBehaviour
 
     [SerializeField] GameObject winAndLoseStuff;
     [SerializeField] TextMeshProUGUI outcomeText;
+
+    [SerializeField] TextMeshProUGUI locationText, weightText;
 
     /// <summary>
     /// Store the current score. Player score (shutting down the AI) is first, followed by AI escaping.
@@ -38,6 +39,7 @@ public class GameManager : MonoBehaviour
         Instance = this;
 
         placeManager.SetActive(false);
+        blockHighlight.SetActive(false);
     }
 
     public void RunSequence()
@@ -146,6 +148,7 @@ public class GameManager : MonoBehaviour
     {
         isPlacing = true;
         placeManager.SetActive(true);
+        blockHighlight.SetActive(true);
         Ray ray;
 
         Destroy(newBlock);
@@ -156,6 +159,7 @@ public class GameManager : MonoBehaviour
         {
             PlaceWithin(newBlock, hitInfo.point.x, hitInfo.point.z);
             placeManager.transform.position = newBlock.transform.position;
+            blockHighlight.transform.position = newBlock.transform.position;
         }
 
         while (true)
@@ -165,6 +169,7 @@ public class GameManager : MonoBehaviour
             {
                 PlaceWithin(newBlock, hitInfo.point.x, hitInfo.point.z);
                 placeManager.transform.position = newBlock.transform.position;
+                blockHighlight.transform.position = newBlock.transform.position;
             }
 
             if (mouseDown)
@@ -188,6 +193,7 @@ public class GameManager : MonoBehaviour
 
         isPlacing = false;
         placeManager.SetActive(false);
+        blockHighlight.SetActive(false);
 
         // update the grid of the MainAI to contain a block
         MainAI.Instance.AddBlock((int)newBlock.transform.position.x, (int)newBlock.transform.position.z);
@@ -206,5 +212,18 @@ public class GameManager : MonoBehaviour
             }
         }
         return true;
+    }
+
+    /// <summary>
+    /// This function is called by blocks when they are clicked on in analysis mode.
+    /// </summary>
+    public void Analyze(int posX, int posZ)
+    {
+        Vector2 blockPos = new(posX, posZ);
+        blockHighlight.SetActive(true);
+        locationText.text = "Block Location: (" + posX + ", " + posZ + ")";
+        weightText.text = "Block Weight: " + MainAI.Instance.GetBlockWeight(blockPos).ToString("F3");
+
+        blockHighlight.transform.position = new Vector3(posX, 1, posZ);
     }
 }

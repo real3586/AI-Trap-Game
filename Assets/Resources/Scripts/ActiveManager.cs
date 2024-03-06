@@ -8,7 +8,8 @@ public class ActiveManager : MonoBehaviour
     public static ActiveManager Instance;
 
     [SerializeField] GameObject optionsButton, optionsStuff, panel, gameStuff, 
-        menuStuff, winAndLose, playOptions, arrowObject, userModeStuff;
+        menuStuff, winAndLose, playOptions, arrowObject, userModeStuff, analysisStuff, analysisButton,
+        superAnalysisStuff, blockHighlight;
     [SerializeField] TextMeshProUGUI dataPointsText;
 
     private void Awake()
@@ -24,12 +25,50 @@ public class ActiveManager : MonoBehaviour
         playOptions.SetActive(false);
         userModeStuff.SetActive(false);
         arrowObject.SetActive(false);
+        analysisButton.SetActive(false);
+        analysisStuff.SetActive(false);
+        blockHighlight.SetActive(false);
     }
 
     public void EscapeOptions()
     {
         optionsStuff.SetActive(false);
         panel.SetActive(false);
+        analysisButton.SetActive(true);
+    }
+
+    public void DisplayOptions()
+    {
+        panel.SetActive(true);
+        optionsStuff.SetActive(true);
+        analysisButton.SetActive(false);
+    }
+
+    public void EnterAnalysisMode()
+    {
+        gameStuff.SetActive(false);
+        analysisButton.SetActive(false);
+        analysisStuff.SetActive(true);
+        superAnalysisStuff.SetActive(false);
+
+        GameManager.Instance.IsAnalysisMode = true;
+        MainAI.Instance.AnalysisModeUpdate();
+    }
+
+    public void ExitAnalysisMode()
+    {
+        analysisStuff.SetActive(false);
+        gameStuff.SetActive(true);
+        analysisButton.SetActive(true);
+        blockHighlight.SetActive(false);
+
+        GameManager.Instance.IsAnalysisMode = false;
+    }
+
+    public void SuperAnalysis()
+    {
+        blockHighlight.SetActive(true);
+        superAnalysisStuff.SetActive(true);
     }
 
     public void PlayGame()
@@ -49,6 +88,7 @@ public class ActiveManager : MonoBehaviour
         playOptions.SetActive(false);        
         optionsButton.SetActive(true);
         arrowObject.SetActive(false);
+        analysisButton.SetActive(true);
 
         GameManager.Instance.isUserMode = false;
         MainAI.Instance.ResetTextFields();
@@ -62,6 +102,7 @@ public class ActiveManager : MonoBehaviour
         panel.SetActive(false);
         playOptions.SetActive(false);
         optionsButton.SetActive(true);
+        analysisButton.SetActive(true);
 
         GameManager.Instance.isUserMode = true;
         MainAI.Instance.ResetTextFields();
@@ -77,5 +118,6 @@ public class ActiveManager : MonoBehaviour
     {
         panel.SetActive(true);
         winAndLose.SetActive(true);
+        analysisButton.SetActive(false);
     }
 }
