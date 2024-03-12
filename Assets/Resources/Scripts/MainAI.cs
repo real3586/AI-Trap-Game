@@ -18,6 +18,10 @@ public class MainAI : MonoBehaviour
         /// </summary>
         public List<BlockedDirections> status;
         /// <summary>
+        /// Where is the AI at this point?
+        /// </summary>
+        public int x, z;
+        /// <summary>
         /// Holds a list booleans with indexes of the Actions enum, indicating whether or not that action is possible. 
         /// </summary>
         public List<bool> possibleActions;
@@ -53,11 +57,12 @@ public class MainAI : MonoBehaviour
 
     public bool IsLerping { get; private set; }
 
-    [SerializeField] TextMeshProUGUI decisionText, outcomeText, dataPointsText, randomText;
+    [SerializeField] TextMeshProUGUI decisionText, outcomeText, dataPointsText, randomText, similarityText;
     [SerializeField] TextMeshProUGUI pastExact, pastSimilar;
     [SerializeField] GameObject arrow, userModeStuff;
     [SerializeField] Button getBlockButton, analysisButton;
     bool wasRandomAction;
+    List<float> averageSimilarity = new();
 
     enum Directions { North, South, West, East, NorthEast, SouthEast, NorthWest, SouthWest }
     enum BlockedDirections { NortheastBlocked, NorthwestBlocked, SoutheastBlocked, SouthwestBlocked }
@@ -113,10 +118,13 @@ public class MainAI : MonoBehaviour
             }
         }
 
+        // create a new state with these details
         State newState = new()
         {
             status = mostBlockedDirections,
-            possibleActions = possibleMoves
+            possibleActions = possibleMoves,
+            x = xPos,
+            z = zPos
         };
 
         // terminate the function and end the game if there are no possible moves, or the whole list is false
@@ -215,6 +223,9 @@ public class MainAI : MonoBehaviour
         // display whether it was a random action
         string randomAction = wasRandomAction ? "Yes" : "No";
         randomText.text = "Was Random: " + randomAction;
+
+        // display the current average similarity scores
+        similarityText.text = "Average Similarity: " + GetAverage(averageSimilarity).ToString("F3");
     }
 
     public void ClearAI()
@@ -227,26 +238,35 @@ public class MainAI : MonoBehaviour
         decisionText.text = "Latest Decision: ";
         randomText.text = "Was Random: ";
         outcomeText.text = "Outcome: ";
+        similarityText.text = "";
     }
 
     public void AnalysisModeUpdate()
     {
-        int[] pastStates = GetPreviousStates(QTable.Last());
         try
         {
-            pastExact.text = "Previous Exact States: " + pastStates[0];
+            int[] pastStates = GetPreviousStates(QTable.Last());
+            try
+            {
+                pastExact.text = "Previous Exact States: " + pastStates[0];
+            }
+            catch
+            {
+                pastExact.text = "Previous Exact States: 0";
+            }
+            try
+            {
+                pastSimilar.text = "Previous Similar States: " + pastStates[1];
+            }
+            catch
+            {
+                pastSimilar.text = "Previous Similar States: 0";
+            }
         }
         catch
         {
-            pastExact.text = "Previous Exact States: 0";
-        }
-        try
-        {
-            pastSimilar.text = "Previous Similar States: " + pastStates[1];
-        }
-        catch
-        {
-            pastSimilar.text = "Previous Similar States: 0";
+            pastExact.text = "No data in table!";
+            pastSimilar.text = "";
         }
     }
 
@@ -262,7 +282,7 @@ public class MainAI : MonoBehaviour
             {
                 exactCount++;
             }
-            else if (SimilarityScore(QTable[i], state.status) >= 0.5f)
+            else if (SimilarityScore(QTable[i], state) >= 0.5f)
             {
                 similarCount++;
             }
@@ -285,16 +305,28 @@ public class MainAI : MonoBehaviour
 
         return 1 / distance;
     }
+
+    public float GetAverage(List<float> list)
+    {
+        float total = 0;
+        foreach(float f in list)
+        {
+            total += f;
+        }
+        return total/list.Count;
+    }
     #endregion
     #region Decision Making and Feedback
     Directions DecideAction(State state, int xPos, int zPos)
     {
+        averageSimilarity.Clear();
+
         // Take a list of all possible actions
         List<Directions> potentialActions = new();
 
         // Check if the AI has made decisions in this state (or similar) before
         if (QTable.Any(entry => entry.status.SequenceEqual(state.status)) || 
-            QTable.Any(entry => SimilarityScore(state, entry.status) >= 0.5f))
+            QTable.Any(entry => SimilarityScore(state, entry) >= 0.5f))
         {
             // If decisions are available, choose the action based on past outcomes
             foreach (var qEntry in QTable)
@@ -313,10 +345,13 @@ public class MainAI : MonoBehaviour
                         {
                             potentialActions.Add(qEntry.decidedAction);
                         }
+
+                        // since the state is 100% similar, add 1 to the similarity tracker
+                        averageSimilarity.Add(1);
                     }
                 }
                 // this else checks if it is at least somewhat similar (above 50%)
-                else if (SimilarityScore(qEntry, state.status) >= 0.5)
+                else if (SimilarityScore(qEntry, state) >= 0.5)
                 {
                     // copy paste of code above
                     if (CanMoveInDirection(qEntry.decidedAction, xPos, zPos))
@@ -328,6 +363,8 @@ public class MainAI : MonoBehaviour
                         {
                             potentialActions.Add(qEntry.decidedAction);
                         }
+
+                        averageSimilarity.Add(SimilarityScore(qEntry, state));
                     }
                 }
             }
@@ -350,8 +387,11 @@ public class MainAI : MonoBehaviour
     /// <param name="history">The state in the past.</param>
     /// <param name="toCompare">The state to compare to history.</param>
     /// <returns></returns>
-    float SimilarityScore(State history, List<BlockedDirections> toCompare)
+    float SimilarityScore(State history, State toCompare)
     {
+        float similarity;
+
+        // first check directions blocked
         // Note: there are 4 directions total
         // new list to store directions that both states share
         List<BlockedDirections> totalStates = new();
@@ -359,14 +399,25 @@ public class MainAI : MonoBehaviour
         // check if there are any more in the toCompare state
         for (int i = 0; i < 4; i++)
         {
-            if (IsPresent(history.status, (BlockedDirections)i) && IsPresent(toCompare, (BlockedDirections)i))
+            if (IsPresent(history.status, (BlockedDirections)i) && IsPresent(toCompare.status, (BlockedDirections)i))
             {
                 totalStates.Add((BlockedDirections)i);
             }
         }
         // the length of the list is how many states they have in common
-        // divide that by 4, that is the similarity
-        return totalStates.Count / 4.0f;
+        // take 1/4 of that to weigh the score (hyperparameter tuning sucks)
+        similarity = totalStates.Count / 4.0f;
+
+        // next check position
+        // use distance to check how close the ai was to the history point
+        float distance = Vector2.Distance(new Vector2(history.x, history.z), new Vector2());
+
+        // take double the reciprocal to get between (0, 2] although its probably really low
+        distance = 2 / distance;
+
+        // add to similarity
+        similarity += distance;
+        return similarity;
     }
 
     bool IsPresent(List<BlockedDirections> blockedDirectionsList, BlockedDirections target)
