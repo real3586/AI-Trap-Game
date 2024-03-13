@@ -11,12 +11,12 @@ using Rand = UnityEngine.Random;
 public class MainAI : MonoBehaviour
 {
     public static MainAI Instance { get; private set; }
-    struct State
+    public struct State
     {
         /// <summary>
         /// How many sides are blocked? Uses a Quadrant system.
         /// </summary>
-        public List<BlockedDirections> status;
+        public List<Enums.BlockedDirections> status;
         /// <summary>
         /// Where is the AI at this point?
         /// </summary>
@@ -28,9 +28,9 @@ public class MainAI : MonoBehaviour
         /// <summary>
         /// What did the AI decide to do in this situation?
         /// </summary>
-        public Directions decidedAction;
+        public Enums.Directions decidedAction;
         /// <summary>
-        /// -1, 0, and 1, with -1 being bad, 0 being okay, and 1 being good.
+        /// [-1, 1] with -1 being bad, 0 being okay, and 1 being good.
         /// </summary>
         public float decisionOutcome;
     }
@@ -64,8 +64,8 @@ public class MainAI : MonoBehaviour
     bool wasRandomAction;
     List<float> averageSimilarity = new();
 
-    enum Directions { North, South, West, East, NorthEast, SouthEast, NorthWest, SouthWest }
-    enum BlockedDirections { NortheastBlocked, NorthwestBlocked, SoutheastBlocked, SouthwestBlocked }
+    // for GAN passive learning
+    int prevBlockX, prevBlockZ;
 
     private void Awake()
     {
@@ -109,12 +109,12 @@ public class MainAI : MonoBehaviour
             }
         }
         // if there is more than one highest or a tie, take them both
-        List<BlockedDirections> mostBlockedDirections = new();
+        List<Enums.BlockedDirections> mostBlockedDirections = new();
         for (int j = 0; j < blockLocations.Count; j++)
         {
             if (blockLocations[j] == maxValue)
             {
-                mostBlockedDirections.Add((BlockedDirections)j);
+                mostBlockedDirections.Add((Enums.BlockedDirections)j);
             }
         }
 
@@ -166,7 +166,7 @@ public class MainAI : MonoBehaviour
         // set the arrow position
         arrow.SetActive(true);
         arrow.transform.SetPositionAndRotation(transform.position + Vector3.up,
-            Quaternion.Euler(0, directionToRotation[newState.decidedAction], 0));
+            Quaternion.Euler(0, Enums.directionToRotation[newState.decidedAction], 0));
 
         // shift the arrow a little forward
         arrow.transform.position += arrow.transform.forward * MathF.Sqrt(2) / 2;
@@ -197,6 +197,12 @@ public class MainAI : MonoBehaviour
         // add the new state to the Q table
         QTable.Add(newState);
 
+        // if passive learning also add to GAN_AI table
+        if (GameManager.Instance.AllowPassiveLearning)
+        {
+            GAN_AI.Instance.AddState(newState, prevBlockX, prevBlockZ);
+        }
+
         // update what the user sees
         UIUpdate(newState.decidedAction, newState.decisionOutcome);
         
@@ -211,7 +217,7 @@ public class MainAI : MonoBehaviour
     }
 
     #region UI Stuff
-    void UIUpdate(Directions decision, float outcome)
+    void UIUpdate(Enums.Directions decision, float outcome)
     {
         // display the decided action and the outcome
         decisionText.text = "Latest Decision: Moved " + decision.ToString();
@@ -225,7 +231,12 @@ public class MainAI : MonoBehaviour
         randomText.text = "Was Random: " + randomAction;
 
         // display the current average similarity scores
-        similarityText.text = "Average Similarity: " + GetAverage(averageSimilarity).ToString("F3");
+        float x = GetAverage(averageSimilarity);
+        if (x == 0)
+        {
+            Debug.Log("e");
+        }
+        similarityText.text = "Average Similarity: " + x.ToString("F3");
     }
 
     public void ClearAI()
@@ -317,12 +328,12 @@ public class MainAI : MonoBehaviour
     }
     #endregion
     #region Decision Making and Feedback
-    Directions DecideAction(State state, int xPos, int zPos)
+    Enums.Directions DecideAction(State state, int xPos, int zPos)
     {
         averageSimilarity.Clear();
 
         // Take a list of all possible actions
-        List<Directions> potentialActions = new();
+        List<Enums.Directions> potentialActions = new();
 
         // Check if the AI has made decisions in this state (or similar) before
         if (QTable.Any(entry => entry.status.SequenceEqual(state.status)) || 
@@ -394,14 +405,14 @@ public class MainAI : MonoBehaviour
         // first check directions blocked
         // Note: there are 4 directions total
         // new list to store directions that both states share
-        List<BlockedDirections> totalStates = new();
+        List<Enums.BlockedDirections> totalStates = new();
 
         // check if there are any more in the toCompare state
         for (int i = 0; i < 4; i++)
         {
-            if (IsPresent(history.status, (BlockedDirections)i) && IsPresent(toCompare.status, (BlockedDirections)i))
+            if (IsPresent(history.status, (Enums.BlockedDirections)i) && IsPresent(toCompare.status, (Enums.BlockedDirections)i))
             {
-                totalStates.Add((BlockedDirections)i);
+                totalStates.Add((Enums.BlockedDirections)i);
             }
         }
         // the length of the list is how many states they have in common
@@ -420,7 +431,7 @@ public class MainAI : MonoBehaviour
         return similarity;
     }
 
-    bool IsPresent(List<BlockedDirections> blockedDirectionsList, BlockedDirections target)
+    bool IsPresent(List<Enums.BlockedDirections> blockedDirectionsList, Enums.BlockedDirections target)
     {
         for (int i = 0; i < blockedDirectionsList.Count; i++)
         {
@@ -448,16 +459,16 @@ public class MainAI : MonoBehaviour
         }
     }
 
-    Directions ChooseRandomAction(List<bool> possibleActions)
+    Enums.Directions ChooseRandomAction(List<bool> possibleActions)
     {
         // Choose a random action from the list of possible actions
-        List<Directions> validActions = new();
+        List<Enums.Directions> validActions = new();
 
         for (int i = 0; i < possibleActions.Count; i++)
         {
             if (possibleActions[i])
             {
-                validActions.Add((Directions)i);
+                validActions.Add((Enums.Directions)i);
             }
         }
 
@@ -469,7 +480,7 @@ public class MainAI : MonoBehaviour
         else
         {
             // If no valid actions, return a default action or handle it as needed
-            return Directions.North;
+            return Enums.Directions.North;
         }
     }
 
@@ -653,10 +664,10 @@ public class MainAI : MonoBehaviour
         {
             for (int i = 0; i < 8; i++)
             {
-                if (TestDirection(x, z, step, (Directions)i))
+                if (TestDirection(x, z, step, (Enums.Directions)i))
                 {
-                    int tempX = x + (int)directionToVector[(Directions)i].x;
-                    int tempZ = z + (int)directionToVector[(Directions)i].z;
+                    int tempX = x + (int)Enums.directionToVector[(Enums.Directions)i].x;
+                    int tempZ = z + (int)Enums.directionToVector[(Enums.Directions)i].z;
                     tempList.Add(MainGrid[tempX, tempZ]);
                 }
             }
@@ -689,21 +700,21 @@ public class MainAI : MonoBehaviour
         return list[indexNumber];
     }
 
-    bool TestDirection(int xPos, int zPos, int step, Directions dir)
+    bool TestDirection(int xPos, int zPos, int step, Enums.Directions dir)
     {
         int rows = MainGrid.GetLength(0);
         int columns = MainGrid.GetLength(1);
         return dir switch
         {
-            Directions.North => zPos + 1 < columns && !MainGrid[xPos, zPos + 1].isBlocked && MainGrid[xPos, zPos + 1].visited == step,
-            Directions.South => zPos - 1 > -1 && !MainGrid[xPos, zPos - 1].isBlocked && MainGrid[xPos, zPos - 1].visited == step,
-            Directions.West => xPos - 1 > -1 && !MainGrid[xPos - 1, zPos].isBlocked && MainGrid[xPos - 1, zPos].visited == step,
-            Directions.East => xPos + 1 < rows && !MainGrid[xPos + 1, zPos].isBlocked && MainGrid[xPos + 1, zPos].visited == step,
+            Enums.Directions.North => zPos + 1 < columns && !MainGrid[xPos, zPos + 1].isBlocked && MainGrid[xPos, zPos + 1].visited == step,
+            Enums.Directions.South => zPos - 1 > -1 && !MainGrid[xPos, zPos - 1].isBlocked && MainGrid[xPos, zPos - 1].visited == step,
+            Enums.Directions.West => xPos - 1 > -1 && !MainGrid[xPos - 1, zPos].isBlocked && MainGrid[xPos - 1, zPos].visited == step,
+            Enums.Directions.East => xPos + 1 < rows && !MainGrid[xPos + 1, zPos].isBlocked && MainGrid[xPos + 1, zPos].visited == step,
 
-            Directions.NorthEast => zPos + 1 < columns && xPos + 1 < rows && !MainGrid[xPos + 1, zPos + 1].isBlocked && MainGrid[xPos + 1, zPos + 1].visited == step,
-            Directions.SouthEast => zPos - 1 > -1 && xPos + 1 < rows && !MainGrid[xPos + 1, zPos - 1].isBlocked && MainGrid[xPos + 1, zPos - 1].visited == step,
-            Directions.NorthWest => zPos + 1 < columns && xPos - 1 > -1 && !MainGrid[xPos - 1, zPos + 1].isBlocked && MainGrid[xPos - 1, zPos + 1].visited == step,
-            Directions.SouthWest => zPos - 1 > -1 && xPos - 1 > -1 && !MainGrid[xPos - 1, zPos - 1].isBlocked && MainGrid[xPos - 1, zPos - 1].visited == step,
+            Enums.Directions.NorthEast => zPos + 1 < columns && xPos + 1 < rows && !MainGrid[xPos + 1, zPos + 1].isBlocked && MainGrid[xPos + 1, zPos + 1].visited == step,
+            Enums.Directions.SouthEast => zPos - 1 > -1 && xPos + 1 < rows && !MainGrid[xPos + 1, zPos - 1].isBlocked && MainGrid[xPos + 1, zPos - 1].visited == step,
+            Enums.Directions.NorthWest => zPos + 1 < columns && xPos - 1 > -1 && !MainGrid[xPos - 1, zPos + 1].isBlocked && MainGrid[xPos - 1, zPos + 1].visited == step,
+            Enums.Directions.SouthWest => zPos - 1 > -1 && xPos - 1 > -1 && !MainGrid[xPos - 1, zPos - 1].isBlocked && MainGrid[xPos - 1, zPos - 1].visited == step,
             _ => false,
         };
     }
@@ -712,10 +723,10 @@ public class MainAI : MonoBehaviour
     {
         for (int i = 0; i < 8; i++)
         {
-            if (TestDirection(x, z, -1, (Directions)i))
+            if (TestDirection(x, z, -1, (Enums.Directions)i))
             {
-                int tempX = x + (int)directionToVector[(Directions)i].x;
-                int tempZ = z + (int)directionToVector[(Directions)i].z;
+                int tempX = x + (int)Enums.directionToVector[(Enums.Directions)i].x;
+                int tempZ = z + (int)Enums.directionToVector[(Enums.Directions)i].z;
 
                 // Check if the adjacent positions in the diagonal direction are not blocked
                 if (!MainGrid[x, tempZ].isBlocked && !MainGrid[tempX, z].isBlocked)
@@ -735,7 +746,7 @@ public class MainAI : MonoBehaviour
     }
     #endregion
     #region Block Analysis
-    Vector3 SimulateMove(Directions dir, Vector3 currentPos)
+    Vector3 SimulateMove(Enums.Directions dir, Vector3 currentPos)
     {
         // uses the same code as MoveAI, but just returns a Vector3 instead of moving anything
         int xPos = (int)currentPos.x;
@@ -743,7 +754,7 @@ public class MainAI : MonoBehaviour
 
         if (CanMoveInDirection(dir, xPos, zPos))
         {
-            return currentPos + directionToVector[dir];
+            return currentPos + Enums.directionToVector[dir];
         }
         return Vector3.zero;
     }
@@ -756,6 +767,8 @@ public class MainAI : MonoBehaviour
             return;
         }
         MainGrid[x, y].isBlocked = true;
+        prevBlockX = x;
+        prevBlockZ = y;
     }
 
     List<float> DetectBlocks(float xPos, float zPos)
@@ -819,23 +832,23 @@ public class MainAI : MonoBehaviour
     /// </summary>
     /// <param name="dir">The Direction to be checked.</param>
     /// <returns>Whether or not the direction is blocked.</returns>
-    bool CanMoveInDirection(Directions dir, int xPos, int zPos)
+    bool CanMoveInDirection(Enums.Directions dir, int xPos, int zPos)
     {
         try
         {
             return dir switch
             {
                 // "straight" directions
-                Directions.North => !MainGrid[xPos, zPos + 1].isBlocked,
-                Directions.South => !MainGrid[xPos, zPos - 1].isBlocked,
-                Directions.West => !MainGrid[xPos - 1, zPos].isBlocked,
-                Directions.East => !MainGrid[xPos + 1, zPos].isBlocked,
+                Enums.Directions.North => !MainGrid[xPos, zPos + 1].isBlocked,
+                Enums.Directions.South => !MainGrid[xPos, zPos - 1].isBlocked,
+                Enums.Directions.West => !MainGrid[xPos - 1, zPos].isBlocked,
+                Enums.Directions.East => !MainGrid[xPos + 1, zPos].isBlocked,
 
                 // diagonal directions
-                Directions.NorthEast => !MainGrid[xPos + 1, zPos + 1].isBlocked && (!MainGrid[xPos + 1, zPos].isBlocked || !MainGrid[xPos, zPos + 1].isBlocked),
-                Directions.SouthEast => !MainGrid[xPos + 1, zPos - 1].isBlocked && (!MainGrid[xPos + 1, zPos].isBlocked || !MainGrid[xPos, zPos - 1].isBlocked),
-                Directions.NorthWest => !MainGrid[xPos - 1, zPos + 1].isBlocked && (!MainGrid[xPos - 1, zPos].isBlocked || !MainGrid[xPos, zPos + 1].isBlocked),
-                Directions.SouthWest => !MainGrid[xPos - 1, zPos - 1].isBlocked && (!MainGrid[xPos - 1, zPos].isBlocked || !MainGrid[xPos, zPos - 1].isBlocked),
+                Enums.Directions.NorthEast => !MainGrid[xPos + 1, zPos + 1].isBlocked && (!MainGrid[xPos + 1, zPos].isBlocked || !MainGrid[xPos, zPos + 1].isBlocked),
+                Enums.Directions.SouthEast => !MainGrid[xPos + 1, zPos - 1].isBlocked && (!MainGrid[xPos + 1, zPos].isBlocked || !MainGrid[xPos, zPos - 1].isBlocked),
+                Enums.Directions.NorthWest => !MainGrid[xPos - 1, zPos + 1].isBlocked && (!MainGrid[xPos - 1, zPos].isBlocked || !MainGrid[xPos, zPos + 1].isBlocked),
+                Enums.Directions.SouthWest => !MainGrid[xPos - 1, zPos - 1].isBlocked && (!MainGrid[xPos - 1, zPos].isBlocked || !MainGrid[xPos, zPos - 1].isBlocked),
                 _ => false,
             };
         }
@@ -849,9 +862,9 @@ public class MainAI : MonoBehaviour
     {
         List<bool> possibleMoves = new();
 
-        for (int i = 0; i < Enum.GetNames(typeof(Directions)).Length; i++)
+        for (int i = 0; i < Enum.GetNames(typeof(Enums.Directions)).Length; i++)
         {
-            Directions direction = (Directions)i;
+            Enums.Directions direction = (Enums.Directions)i;
 
             possibleMoves.Add(CanMoveInDirection(direction, posX, posZ));
         }
@@ -873,7 +886,7 @@ public class MainAI : MonoBehaviour
         return false;
     }
 
-    void MoveAI(Directions dir)
+    void MoveAI(Enums.Directions dir)
     {
         Vector3 currentPos = transform.position;
         int xPos = (int)currentPos.x;
@@ -881,7 +894,7 @@ public class MainAI : MonoBehaviour
 
         if (CanMoveInDirection(dir, xPos, zPos))
         {
-            StartCoroutine(LerpFunction(currentPos, currentPos + directionToVector[dir]));
+            StartCoroutine(LerpFunction(currentPos, currentPos + Enums.directionToVector[dir]));
         }
     }
 
@@ -905,26 +918,4 @@ public class MainAI : MonoBehaviour
         yield return null;
     }
     #endregion
-    readonly Dictionary<Directions, Vector3> directionToVector = new()
-    {
-        {Directions.North, Vector3.forward},
-        {Directions.South, Vector3.back },
-        {Directions.West, Vector3.left },
-        {Directions.East, Vector3.right },
-        {Directions.NorthEast, Vector3.forward + Vector3.right },
-        {Directions.SouthEast, Vector3.back + Vector3.right },
-        {Directions.NorthWest, Vector3.forward + Vector3.left },
-        {Directions.SouthWest, Vector3.back + Vector3.left }
-    };
-    readonly Dictionary<Directions, float> directionToRotation = new()
-    {
-        {Directions.North, 0},
-        {Directions.South, 180 },
-        {Directions.West, 270 },
-        {Directions.East, 90 },
-        {Directions.NorthEast, 45 },
-        {Directions.SouthEast, 135 },
-        {Directions.NorthWest, 315 },
-        {Directions.SouthWest, 225 }
-    };
 }

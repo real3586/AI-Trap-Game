@@ -15,6 +15,7 @@ public class GameManager : MonoBehaviour
     public bool UserProvidedFeedback { get; set; }
     public bool IsAnalysisMode { get; set; }
     public float DecisionOutcome { get; set; }
+    public bool AllowPassiveLearning { get; set; }
     RaycastHit hitInfo = new();
     [SerializeField] GameObject newBlock, blockPrefab, placeManager, blockHighlight;
 
@@ -65,6 +66,11 @@ public class GameManager : MonoBehaviour
         StartCoroutine(MainAI.Instance.AISequence());
     }
 
+    IEnumerator GANSequence()
+    {
+        yield return null;
+    }
+
     // code from block defense lol
     void PlaceWithin(GameObject i, float hitX, float hitZ)
     {
@@ -104,44 +110,6 @@ public class GameManager : MonoBehaviour
         {
             return;
         }
-    }
-
-    public void GameEnd(bool didAIWin)
-    {
-        StopAllCoroutines();
-
-        Destroy(newBlock);
-
-        ActiveManager.Instance.GameEnd();
-
-        if (didAIWin)
-        {
-            outcomeText.text = "You Lost!";
-
-            currentScore += Vector2.up;
-        }
-        else
-        {
-            outcomeText.text = "You Win!";
-
-            currentScore += Vector2.right;
-        }
-        scoreText.text = "Score: " + currentScore.x + "-" + currentScore.y;        
-    }
-
-    public void ResetGame()
-    {
-        ActiveManager.Instance.PlayGame();
-
-        mainAI.transform.position = new Vector3(4, 1, 4);
-        MainAI.Instance.ResetGrid();
-
-        for (int i = 0; i < allBlocks.transform.childCount; i++)
-        {
-            Destroy(allBlocks.GetChild(i).gameObject);
-        }
-
-        UserProvidedFeedback = false;
     }
 
     IEnumerator PlaceBlock()
@@ -196,8 +164,48 @@ public class GameManager : MonoBehaviour
         blockHighlight.SetActive(false);
 
         // update the grid of the MainAI to contain a block
-        MainAI.Instance.AddBlock((int)newBlock.transform.position.x, (int)newBlock.transform.position.z);
+        int newBlockX = (int)newBlock.transform.position.x;
+        int newBlockZ = (int)newBlock.transform.position.z;
+        MainAI.Instance.AddBlock(newBlockX, newBlockZ);
         newBlock = null;
+    }
+
+    public void GameEnd(bool didAIWin)
+    {
+        StopAllCoroutines();
+
+        Destroy(newBlock);
+
+        ActiveManager.Instance.GameEnd();
+
+        if (didAIWin)
+        {
+            outcomeText.text = "You Lost!";
+
+            currentScore += Vector2.up;
+        }
+        else
+        {
+            outcomeText.text = "You Win!";
+
+            currentScore += Vector2.right;
+        }
+        scoreText.text = "Score: " + currentScore.x + "-" + currentScore.y;        
+    }
+
+    public void ResetGame()
+    {
+        ActiveManager.Instance.PlayGame();
+
+        mainAI.transform.position = new Vector3(4, 1, 4);
+        MainAI.Instance.ResetGrid();
+
+        for (int i = 0; i < allBlocks.transform.childCount; i++)
+        {
+            Destroy(allBlocks.GetChild(i).gameObject);
+        }
+
+        UserProvidedFeedback = false;
     }
 
     bool DidHitFloor()
