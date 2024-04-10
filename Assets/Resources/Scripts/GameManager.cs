@@ -11,7 +11,7 @@ public class GameManager : MonoBehaviour
 
     bool isPlacing;
     bool mouseDown;
-    public bool isUserMode;
+    public Enums.Modes mode;
     public bool UserProvidedFeedback { get; set; }
     public bool IsAnalysisMode { get; set; }
     public float DecisionOutcome { get; set; }
@@ -52,6 +52,15 @@ public class GameManager : MonoBehaviour
         StartCoroutine(MainSequence());
     }
 
+    public void RunSequenceAlgo()
+    {
+        if (isPlacing)
+        {
+            return;
+        }
+        StartCoroutine(AlgoSequence());
+    }
+
     private void Update()
     {
         mouseDown = Input.GetMouseButtonDown(0);
@@ -64,6 +73,15 @@ public class GameManager : MonoBehaviour
         yield return StartCoroutine(PlaceBlock());
         yield return new WaitForSeconds(0.5f);
         StartCoroutine(MainAI.Instance.AISequence());
+    }
+
+    IEnumerator AlgoSequence()
+    {
+        yield return new WaitForSeconds(0.25f);
+        
+        yield return StartCoroutine(PlaceBlock());
+        yield return new WaitForSeconds(0.5f);
+        StartCoroutine(MainAI.Instance.AlgoSequence());
     }
 
     // code from block defense lol

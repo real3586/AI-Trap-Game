@@ -29,4 +29,16 @@ public class Enums : MonoBehaviour
         {Directions.NorthWest, 315 },
         {Directions.SouthWest, 225 }
     };
+    public static readonly Dictionary<Vector3, Directions> vectorToDirection = new()
+    {
+        {Vector3.forward, Directions.North},
+        {Vector3.back , Directions.South },
+        {Vector3.left , Directions.West },
+        {Vector3.right , Directions.East },
+        {Vector3.forward + Vector3.right, Directions.NorthEast},
+        {Vector3.back + Vector3.right , Directions.SouthEast },
+        {Vector3.forward + Vector3.left , Directions.NorthWest },
+        {Vector3.back + Vector3.left , Directions.SouthWest }
+    };
+    public enum Modes { Classic, User, Algo }
 }

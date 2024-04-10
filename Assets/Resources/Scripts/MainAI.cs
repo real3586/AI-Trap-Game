@@ -64,6 +64,9 @@ public class MainAI : MonoBehaviour
     bool wasRandomAction;
     List<float> averageSimilarity = new();
 
+    // for algorithm mode
+    List<GridItem> algoPath = new();
+
     private void Awake()
     {
         Instance = this;
@@ -137,7 +140,7 @@ public class MainAI : MonoBehaviour
         arrow.transform.position += arrow.transform.forward * MathF.Sqrt(2) / 2;
 
         Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
-        if (!GameManager.Instance.isUserMode)
+        if (GameManager.Instance.mode == Enums.Modes.Classic)
         {
             // determine whether it was a good choice
             newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
@@ -915,6 +918,192 @@ public class MainAI : MonoBehaviour
 
         IsLerping = false;
         yield return null;
+    }
+    #endregion
+    #region Algorithm Stuff
+    public IEnumerator AlgoSequence()
+    {
+        int xPos = (int)transform.position.x;
+        int zPos = (int)transform.position.z;
+        Vector3 hypotheticalPos = Vector3.zero;
+
+        // first check the current position and possible moves
+        List<bool> possibleMoves = PossibleDirections(xPos, zPos);
+
+        // code stolen from main ai sequence
+        // run some calculations to check if the game is even possible to win
+        // check if there are any possible end points, ends the game a little faster
+        List<Vector3> endpoints = GetValidEndpoints();
+        if (endpoints.Count == 0)
+        {
+            GameManager.Instance.GameEnd(false);
+            yield break;
+        }
+
+        // pathfind to all the endpoints, and if they all are 1000, the game is over
+        List<int> pathLengths = new();
+        for (int i = 0; i < endpoints.Count; i++)
+        {
+            int x = (int)endpoints[i].x;
+            int z = (int)endpoints[i].z;
+
+            pathLengths.Add(TargetPath(xPos, zPos, x, z));
+        }
+        if (pathLengths.All(value => value == 1000))
+        {
+            GameManager.Instance.GameEnd(false);
+            yield break;
+        }
+
+        // iterate through all possible moves and check for instant wins
+        for (int i = 0; i < possibleMoves.Count; i++)
+        {
+            if (possibleMoves[i])
+            {
+                Enums.Directions dir = (Enums.Directions)i;
+                hypotheticalPos = SimulateMove(dir, new Vector3(xPos, 1, zPos));
+                if (CheckWin((int)hypotheticalPos.x, (int)hypotheticalPos.z))
+                {
+                    // if it is an instant win via the simulated move, instantly move there
+                    ExecuteMoveAlgo(dir);
+                }
+            }
+        }
+
+        // if no instant wins, use the existing weight function code to find the closest points
+        List<Vector3> bestMoves = FindBestMoveAlgo(xPos, zPos);
+
+        // pick a random point
+        int random = Rand.Range(0, bestMoves.Count);
+
+        // pathfind to that point
+        // we don't need the whole path, just the first move
+        // so use a modified target path function
+        Vector3 point = bestMoves[random];
+        Enums.Directions travelDir = 0;
+        if (AlgoPath(xPos, zPos, (int)point.x, (int)point.z))
+        {
+            Vector3 nextStep = new(algoPath[1].x, 1, algoPath[1].z);
+            Vector3 currentPos = new(xPos, 1, zPos);
+            Vector3 directionVector = nextStep - currentPos;
+            travelDir = Enums.vectorToDirection[directionVector];
+            hypotheticalPos = SimulateMove(travelDir, currentPos);
+            ExecuteMoveAlgo(travelDir);
+        }
+
+        // set the arrow position
+        arrow.SetActive(true);
+        arrow.transform.SetPositionAndRotation(transform.position + Vector3.up,
+            Quaternion.Euler(0, Enums.directionToRotation[travelDir], 0));
+
+        // shift the arrow a little forward
+        arrow.transform.position += arrow.transform.forward * MathF.Sqrt(2) / 2;
+
+        // finally check if the AI is on a winning square
+        if (CheckWin((int)hypotheticalPos.x, (int)hypotheticalPos.z))
+        {
+            GameManager.Instance.GameEnd(true);
+            yield break;
+        }
+        yield return null;
+    }
+
+    void ExecuteMoveAlgo(Enums.Directions dir)
+    {
+        Vector3 currentPos = transform.position;
+        int xPos = (int)currentPos.x;
+        int zPos = (int)currentPos.z;
+
+        if (CanMoveInDirection(dir, xPos, zPos))
+        {
+            StartCoroutine(LerpFunction(currentPos, currentPos + Enums.directionToVector[dir]));
+        }
+    }
+
+    List<Vector3> FindBestMoveAlgo(int xPos, int zPos)
+    {
+        // get all the valid endpoints from the current position
+        List<Vector3> previousEdges = GetValidEndpoints();
+
+        // pathfind to all of them, then store the distance to all the points
+        // the indexes will match
+        List<int> pathLength = new();
+        for (int i = 0; i < previousEdges.Count; i++)
+        {
+            int endX = (int)previousEdges[i].x;
+            int endZ = (int)previousEdges[i].z;
+            pathLength.Add(TargetPath(xPos, zPos, endX, endZ));
+        }
+
+        // find the smallest endpoint distance
+        int minDistance = 1000;
+        for (int j = 0; j < previousEdges.Count; j++)
+        {
+            if (pathLength[j] < minDistance)
+            {
+                minDistance = pathLength[j];
+            }
+        }
+
+        // from the smallest endpoint distance find the endpoints with that distance
+        List<Vector3> closestEndpoints = new();
+        List<int> previousEndpointDistance = new();
+        for (int k = 0; k < previousEdges.Count; k++)
+        {
+            if (pathLength[k] == minDistance)
+            {
+                // add the endpoint that corresponds to this index
+                closestEndpoints.Add(previousEdges[k]);
+                previousEndpointDistance.Add(pathLength[k]);
+            }
+        }
+
+        // return the endpoints with that distance
+        return closestEndpoints;
+    }
+
+    bool AlgoPath(int startX, int startZ, int endX, int endZ)
+    {
+        SetDistance(startX, startZ);
+
+        int step;
+        int x = endX;
+        int z = endZ;
+        List<GridItem> tempList = new();
+
+        algoPath.Clear();
+
+        if (!MainGrid[endX, endZ].isBlocked && MainGrid[endX, endZ].visited > 0)
+        {
+            algoPath.Add(MainGrid[x, z]);
+            step = MainGrid[x, z].visited - 1;
+        }
+        else
+        {
+            return false;
+        }
+
+        for (; step > -1; step--)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                if (TestDirection(x, z, step, (Enums.Directions)i))
+                {
+                    int tempX = x + (int)Enums.directionToVector[(Enums.Directions)i].x;
+                    int tempZ = z + (int)Enums.directionToVector[(Enums.Directions)i].z;
+                    tempList.Add(MainGrid[tempX, tempZ]);
+                }
+            }
+
+            Vector3 target = new(endX, 0, endZ);
+            GridItem tempObj = FindClosest(target, tempList);
+            algoPath.Add(tempObj);
+            x = tempObj.x;
+            z = tempObj.z;
+            tempList.Clear();
+        }
+        algoPath.Reverse();
+        return true;
     }
     #endregion
 }

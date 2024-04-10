@@ -90,11 +90,26 @@ public class ActiveManager : MonoBehaviour
         arrowObject.SetActive(false);
         analysisButton.SetActive(true);
 
-        GameManager.Instance.isUserMode = false;
+        GameManager.Instance.mode = Enums.Modes.Classic;
         MainAI.Instance.ResetTextFields();
     }
 
     public void PlayUser()
+    {
+        arrowObject.SetActive(false);
+        gameStuff.SetActive(true);
+        panel.SetActive(false);
+        playOptions.SetActive(false);
+        optionsButton.SetActive(true);
+        analysisButton.SetActive(true);
+
+        userModeStuff.SetActive(false);
+
+        GameManager.Instance.mode = Enums.Modes.User;
+        MainAI.Instance.ResetTextFields();
+    }
+
+    public void PlayAlgo()
     {
         arrowObject.SetActive(false);
         userModeStuff.SetActive(false);
@@ -104,7 +119,7 @@ public class ActiveManager : MonoBehaviour
         optionsButton.SetActive(true);
         analysisButton.SetActive(true);
 
-        GameManager.Instance.isUserMode = true;
+        GameManager.Instance.mode = Enums.Modes.Algo;
         MainAI.Instance.ResetTextFields();
     }
 
