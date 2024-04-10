@@ -66,11 +66,6 @@ public class GameManager : MonoBehaviour
         StartCoroutine(MainAI.Instance.AISequence());
     }
 
-    IEnumerator GANSequence()
-    {
-        yield return null;
-    }
-
     // code from block defense lol
     void PlaceWithin(GameObject i, float hitX, float hitZ)
     {

@@ -64,9 +64,6 @@ public class MainAI : MonoBehaviour
     bool wasRandomAction;
     List<float> averageSimilarity = new();
 
-    // for GAN passive learning
-    int prevBlockX, prevBlockZ;
-
     private void Awake()
     {
         Instance = this;
@@ -93,42 +90,10 @@ public class MainAI : MonoBehaviour
         int xPos = (int)transform.position.x;
         int zPos = (int)transform.position.z;
 
-        // first check all possible moves, if any
-        List<bool> possibleMoves = PossibleDirections(xPos, zPos);
-
-        // decide the current state
-        List<float> blockLocations = DetectBlocks(xPos, zPos);
-
-        // take the highest value in the list
-        float maxValue = 0;
-        for (int i = 0; i < blockLocations.Count; i++)
-        {
-            if (maxValue < blockLocations[i])
-            {
-                maxValue = blockLocations[i];
-            }
-        }
-        // if there is more than one highest or a tie, take them both
-        List<Enums.BlockedDirections> mostBlockedDirections = new();
-        for (int j = 0; j < blockLocations.Count; j++)
-        {
-            if (blockLocations[j] == maxValue)
-            {
-                mostBlockedDirections.Add((Enums.BlockedDirections)j);
-            }
-        }
-
-        // create a new state with these details
-        State newState = new()
-        {
-            status = mostBlockedDirections,
-            possibleActions = possibleMoves,
-            x = xPos,
-            z = zPos
-        };
+        State newState = GetState();
 
         // terminate the function and end the game if there are no possible moves, or the whole list is false
-        if (possibleMoves.All(value => value == false))
+        if (newState.possibleActions.All(value => value == false))
         {
             GameManager.Instance.GameEnd(false);
             yield break;
@@ -197,12 +162,6 @@ public class MainAI : MonoBehaviour
         // add the new state to the Q table
         QTable.Add(newState);
 
-        // if passive learning also add to GAN_AI table
-        if (GameManager.Instance.AllowPassiveLearning)
-        {
-            GAN_AI.Instance.AddState(newState, prevBlockX, prevBlockZ);
-        }
-
         // update what the user sees
         UIUpdate(newState.decidedAction, newState.decisionOutcome);
         
@@ -214,6 +173,48 @@ public class MainAI : MonoBehaviour
         }
 
         yield return null;
+    }
+
+    public State GetState()
+    {
+        int xPos = (int)transform.position.x;
+        int zPos = (int)transform.position.z;
+
+        // first check all possible moves, if any
+        List<bool> possibleMoves = PossibleDirections(xPos, zPos);
+
+        // decide the current state
+        List<float> blockLocations = DetectBlocks(xPos, zPos);
+
+        // take the highest value in the list
+        float maxValue = 0;
+        for (int i = 0; i < blockLocations.Count; i++)
+        {
+            if (maxValue < blockLocations[i])
+            {
+                maxValue = blockLocations[i];
+            }
+        }
+        // if there is more than one highest or a tie, take them both
+        List<Enums.BlockedDirections> mostBlockedDirections = new();
+        for (int j = 0; j < blockLocations.Count; j++)
+        {
+            if (blockLocations[j] == maxValue)
+            {
+                mostBlockedDirections.Add((Enums.BlockedDirections)j);
+            }
+        }
+
+        // create a new state with these details
+        State newState = new()
+        {
+            status = mostBlockedDirections,
+            possibleActions = possibleMoves,
+            x = xPos,
+            z = zPos
+        };
+
+        return newState;
     }
 
     #region UI Stuff
@@ -767,8 +768,6 @@ public class MainAI : MonoBehaviour
             return;
         }
         MainGrid[x, y].isBlocked = true;
-        prevBlockX = x;
-        prevBlockZ = y;
     }
 
     List<float> DetectBlocks(float xPos, float zPos)
