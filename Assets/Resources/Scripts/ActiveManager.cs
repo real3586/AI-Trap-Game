@@ -9,7 +9,7 @@ public class ActiveManager : MonoBehaviour
 
     [SerializeField] GameObject optionsButton, optionsStuff, panel, gameStuff, 
         menuStuff, winAndLose, playOptions, arrowObject, userModeStuff, analysisStuff, analysisButton,
-        superAnalysisStuff, blockHighlight;
+        superAnalysisStuff, blockHighlight, howToPlayStuff;
     [SerializeField] TextMeshProUGUI dataPointsText;
 
     private void Awake()
@@ -53,6 +53,7 @@ public class ActiveManager : MonoBehaviour
 
         GameManager.Instance.IsAnalysisMode = true;
         MainAI.Instance.AnalysisModeUpdate();
+        optionsButton.SetActive(false);
     }
 
     public void ExitAnalysisMode()
@@ -63,12 +64,25 @@ public class ActiveManager : MonoBehaviour
         blockHighlight.SetActive(false);
 
         GameManager.Instance.IsAnalysisMode = false;
+        optionsButton.SetActive(true);
     }
 
     public void SuperAnalysis()
     {
         blockHighlight.SetActive(true);
         superAnalysisStuff.SetActive(true);
+    }
+
+    public void HowToPlay()
+    {
+        menuStuff.SetActive(false);
+        howToPlayStuff.SetActive(true);
+    }
+
+    public void BackToMenu()
+    {
+        howToPlayStuff.SetActive(false);
+        menuStuff.SetActive(true);
     }
 
     public void PlayGame()

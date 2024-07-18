@@ -956,39 +956,47 @@ public class MainAI : MonoBehaviour
         }
 
         // iterate through all possible moves and check for instant wins
+        bool foundInstantWin = false;
+        Enums.Directions travelDir = 0;
         for (int i = 0; i < possibleMoves.Count; i++)
         {
             if (possibleMoves[i])
             {
                 Enums.Directions dir = (Enums.Directions)i;
-                hypotheticalPos = SimulateMove(dir, new Vector3(xPos, 1, zPos));
+                hypotheticalPos = SimulateMove(dir, transform.position);
                 if (CheckWin((int)hypotheticalPos.x, (int)hypotheticalPos.z))
                 {
                     // if it is an instant win via the simulated move, instantly move there
                     ExecuteMoveAlgo(dir);
+                    foundInstantWin = true;
+                    travelDir = (Enums.Directions)i;
+                    break;
                 }
             }
         }
 
-        // if no instant wins, use the existing weight function code to find the closest points
-        List<Vector3> bestMoves = FindBestMoveAlgo(xPos, zPos);
-
-        // pick a random point
-        int random = Rand.Range(0, bestMoves.Count);
-
-        // pathfind to that point
-        // we don't need the whole path, just the first move
-        // so use a modified target path function
-        Vector3 point = bestMoves[random];
-        Enums.Directions travelDir = 0;
-        if (AlgoPath(xPos, zPos, (int)point.x, (int)point.z))
+        if (!foundInstantWin)
         {
-            Vector3 nextStep = new(algoPath[1].x, 1, algoPath[1].z);
-            Vector3 currentPos = new(xPos, 1, zPos);
-            Vector3 directionVector = nextStep - currentPos;
-            travelDir = Enums.vectorToDirection[directionVector];
-            hypotheticalPos = SimulateMove(travelDir, currentPos);
-            ExecuteMoveAlgo(travelDir);
+            // if no instant wins, use the existing weight function code to find the closest points
+            List<Vector3> bestMoves = FindBestMoveAlgo(xPos, zPos);
+
+            // pick a random point
+            int random = Rand.Range(0, bestMoves.Count);
+
+            // pathfind to that point
+            // we don't need the whole path, just the first move
+            // so use a modified target path function
+            Vector3 point = bestMoves[random];
+            if (AlgoPath(xPos, zPos, (int)point.x, (int)point.z))
+            {
+                Vector3 nextStep = new(algoPath[1].x, 1, algoPath[1].z);
+                Vector3 currentPos = new(xPos, 1, zPos);
+                Vector3 directionVector = nextStep - currentPos;
+                Debug.Log(directionVector);
+                travelDir = Enums.vectorToDirection[directionVector];
+                hypotheticalPos = SimulateMove(travelDir, currentPos);
+                ExecuteMoveAlgo(travelDir);
+            }
         }
 
         // set the arrow position
@@ -1037,20 +1045,20 @@ public class MainAI : MonoBehaviour
 
         // find the smallest endpoint distance
         int minDistance = 1000;
-        for (int j = 0; j < previousEdges.Count; j++)
+        for (int i = 0; i < previousEdges.Count; i++)
         {
-            if (pathLength[j] < minDistance)
+            if (pathLength[i] < minDistance)
             {
-                minDistance = pathLength[j];
+                minDistance = pathLength[i];
             }
         }
 
-        // from the smallest endpoint distance find the endpoints with that distance
+        // from the smallest endpoint distance find the endpoints with that distance or less
         List<Vector3> closestEndpoints = new();
         List<int> previousEndpointDistance = new();
         for (int k = 0; k < previousEdges.Count; k++)
         {
-            if (pathLength[k] == minDistance)
+            if (pathLength[k] <= minDistance)
             {
                 // add the endpoint that corresponds to this index
                 closestEndpoints.Add(previousEdges[k]);
