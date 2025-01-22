@@ -5,6 +5,7 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    // all code is finalized
     public static GameManager Instance { get; private set; }
 
     [SerializeField] GameObject mainAI;
