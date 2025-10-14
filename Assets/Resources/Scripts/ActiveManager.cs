@@ -136,6 +136,18 @@ public class ActiveManager : MonoBehaviour
         GameManager.Instance.mode = Enums.Modes.Algo;
         MainAI.Instance.ResetTextFields();
     }
+    public void PlayGAN()
+    {
+        gameStuff.SetActive(true);
+        panel.SetActive(false);
+        playOptions.SetActive(false);        
+        optionsButton.SetActive(true);
+        arrowObject.SetActive(false);
+        analysisButton.SetActive(true);
+
+        GameManager.Instance.mode = Enums.Modes.GAN;
+        MainAI.Instance.ResetTextFields();
+    }
 
     public void ClearAI()
     {

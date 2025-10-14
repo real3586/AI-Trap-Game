@@ -40,5 +40,5 @@ public class Enums : MonoBehaviour
         {Vector3.forward + Vector3.left , Directions.NorthWest },
         {Vector3.back + Vector3.left , Directions.SouthWest }
     };
-    public enum Modes { Classic, User, Algo }
+    public enum Modes { Classic, User, Algo, GAN }
 }

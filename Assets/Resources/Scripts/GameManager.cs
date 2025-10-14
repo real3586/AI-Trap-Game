@@ -18,7 +18,6 @@ public class GameManager : MonoBehaviour
     public bool UserProvidedFeedback { get; set; }
     public bool IsAnalysisMode { get; set; }
     public float DecisionOutcome { get; set; }
-    public bool AllowPassiveLearning { get; set; }
     RaycastHit hitInfo = new();
     [SerializeField] GameObject newBlock, blockPrefab, placeManager, blockHighlight;
 
@@ -81,10 +80,23 @@ public class GameManager : MonoBehaviour
     IEnumerator AlgoSequence()
     {
         yield return _waitForSeconds0_25;
-        
+
         yield return StartCoroutine(PlaceBlock());
         yield return _waitForSeconds0_5;
         StartCoroutine(MainAI.Instance.AlgoSequence());
+    }
+    
+    IEnumerator GANSequence()
+    {
+        // GAN goes first
+        yield return _waitForSeconds0_25;
+        StartCoroutine(GAN_AI.Instance.GANSequence());
+        yield return new WaitUntil(() => UserProvidedFeedback);
+
+        // then regular AI goes
+        yield return _waitForSeconds0_25;
+        StartCoroutine(MainAI.Instance.AISequence());
+        yield return new WaitUntil(() => UserProvidedFeedback);
     }
 
     // code from block defense lol
