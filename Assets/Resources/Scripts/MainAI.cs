@@ -65,21 +65,25 @@ public class MainAI : MonoBehaviour
 
     [Header("Hyperparameters")]
     [SerializeField, Tooltip("Minimum value for a decision to be considered good")] 
-    float goodDecisionThreshhold = 0.5f;
+    float goodDecisionThreshold = 0.5f;
     [SerializeField, Tooltip("Weight given to a good decision")]
-    float goodDecisionWeight = 3f;
+    float goodDecisionWeight = 6f;
     [SerializeField, Tooltip("Minimum value for a decision to be considered okay")] 
-    float okayDecisionThreshhold = -0.5f;
+    float okayDecisionThreshold = -0.5f;
     [SerializeField, Tooltip("Weight given to an okay decision")] 
     float okayDecisionWeight = 1.5f;
     [SerializeField, Tooltip("Weight given to a bad decision. Bad threshhold is based on not good and not okay")]
     float badDecisionWeight = 1.0f;
+    [SerializeField, Tooltip("How similar 2 states need to be for the AI to consider it")] 
+    float similarityThreshold = 0.8f;
     [SerializeField, Tooltip("Similarity weight of 2 states based on their shared blockedDirections. Higher = shared directions will have less impact on similarity")] 
-    float similarityDirections = 4.0f;
+    float similarityDirections = 10.0f;
     [SerializeField, Tooltip("Similarity weight of 2 states based on how close they are. Higher = distance will have more impact on similarity")] 
-    float similarityDistance = 2.0f;
+    float similarityDistance = 3.0f;
     bool wasRandomAction;
     List<float> averageSimilarity = new();
+
+    public bool pauseAILearning = false;
 
     // for algorithm mode
     List<GridItem> algoPath = new();
@@ -179,8 +183,8 @@ public class MainAI : MonoBehaviour
             newState.decisionOutcome = GameManager.Instance.DecisionOutcome;
             userModeStuff.SetActive(false);
         }
-        // add the new state to the Q table
-        QTable.Add(newState);
+        // add the new state to the Q table if we are allowed to
+        if (!pauseAILearning) QTable.Add(newState);
 
         // update what the user sees
         UIUpdate(newState.decidedAction, newState.decisionOutcome);
@@ -328,7 +332,7 @@ public class MainAI : MonoBehaviour
         Vector2 position = new(x, z);
         float distance = Vector2.Distance(position, blockPosition);
 
-        return 1 / distance;
+        return 1 / Mathf.Pow(distance, 2);
     }
 
     public float GetAverage(List<float> list)
@@ -358,7 +362,7 @@ public class MainAI : MonoBehaviour
 
         // Check if the AI has made decisions in this state (or similar) before
         if (QTable.Any(entry => entry.status.SequenceEqual(state.status)) || 
-            QTable.Any(entry => SimilarityScore(state, entry) >= 0.5f))
+            QTable.Any(entry => SimilarityScore(state, entry) >= similarityThreshold))
         {
             // If decisions are available, choose the action based on past outcomes
             foreach (var qEntry in QTable)
@@ -383,7 +387,7 @@ public class MainAI : MonoBehaviour
                     }
                 }
                 // this else checks if it is at least somewhat similar (above 50%)
-                else if (SimilarityScore(qEntry, state) >= 0.5)
+                else if (SimilarityScore(qEntry, state) >= similarityThreshold)
                 {
                     // copy paste of code above
                     if (CanMoveInDirection(qEntry.decidedAction, xPos, zPos))
@@ -450,7 +454,6 @@ public class MainAI : MonoBehaviour
 
         // add to similarity
         similarity += distance;
-        Debug.Log("Similarity score: " + similarity);
         return similarity;
     }
 
@@ -468,11 +471,11 @@ public class MainAI : MonoBehaviour
 
     float GetWeight(float decisionOutcome)
     {
-        if (decisionOutcome >= goodDecisionThreshhold)
+        if (decisionOutcome >= goodDecisionThreshold)
         {
             return decisionOutcome * goodDecisionWeight; // Weight for good decisions
         }
-        else if (decisionOutcome > okayDecisionThreshhold)
+        else if (decisionOutcome > okayDecisionThreshold)
         {
             return decisionOutcome * okayDecisionWeight; // Weight for okay decisions
         }
@@ -848,7 +851,7 @@ public class MainAI : MonoBehaviour
                     // the closer the block is, the more it will be accounted for
                     // diagonals: the ai will not care as much
                     Vector2 blockPosition = new(x, y);
-                    float distance = 1 / Vector2.Distance(aiPos, blockPosition);
+                    float distance = 1 / Mathf.Pow(Vector2.Distance(aiPos, blockPosition), 2);
 
                     // check where the block is relative to the agent
                     // agent will learn to avoid directions with large amounts of blocks
