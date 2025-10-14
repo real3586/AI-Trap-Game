@@ -35,7 +35,6 @@ public class MainAI : MonoBehaviour
         public float decisionOutcome;
     }
     List<State> QTable = new();
-
     public struct GridItem
     {
         /// <summary>
@@ -57,10 +56,28 @@ public class MainAI : MonoBehaviour
 
     public bool IsLerping { get; private set; }
 
-    [SerializeField] TextMeshProUGUI decisionText, outcomeText, dataPointsText, randomText, similarityText;
+    [Header("UI Stuff")]
+    [SerializeField] TextMeshProUGUI decisionText; // weird because Unity is
+    [SerializeField] TextMeshProUGUI outcomeText, dataPointsText, randomText, similarityText;
     [SerializeField] TextMeshProUGUI pastExact, pastSimilar;
     [SerializeField] GameObject arrow, userModeStuff;
     [SerializeField] Button getBlockButton, analysisButton;
+
+    [Header("Hyperparameters")]
+    [SerializeField, Tooltip("Minimum value for a decision to be considered good")] 
+    float goodDecisionThreshhold = 0.5f;
+    [SerializeField, Tooltip("Weight given to a good decision")]
+    float goodDecisionWeight = 3f;
+    [SerializeField, Tooltip("Minimum value for a decision to be considered okay")] 
+    float okayDecisionThreshhold = -0.5f;
+    [SerializeField, Tooltip("Weight given to an okay decision")] 
+    float okayDecisionWeight = 1.5f;
+    [SerializeField, Tooltip("Weight given to a bad decision. Bad threshhold is based on not good and not okay")]
+    float badDecisionWeight = 1.0f;
+    [SerializeField, Tooltip("Similarity weight of 2 states based on their shared blockedDirections. Higher = shared directions will have less impact on similarity")] 
+    float similarityDirections = 4.0f;
+    [SerializeField, Tooltip("Similarity weight of 2 states based on how close they are. Higher = distance will have more impact on similarity")] 
+    float similarityDistance = 2.0f;
     bool wasRandomAction;
     List<float> averageSimilarity = new();
 
@@ -93,17 +110,17 @@ public class MainAI : MonoBehaviour
         int xPos = (int)transform.position.x;
         int zPos = (int)transform.position.z;
 
-        State newState = GetState();
+        State newState = GetState(xPos, zPos);
 
-        // terminate the function and end the game if there are no possible moves, or the whole list is false
+        // check if the game is over, and AI cannot make it to the end
+        // 1/3: if there are no possible moves, or the whole list is false
         if (newState.possibleActions.All(value => value == false))
         {
             GameManager.Instance.GameEnd(false);
             yield break;
         }
 
-        // run some calculations to check if the game is even possible to win
-        // check if there are any possible end points, ends the game a little faster
+        // 2/3: if there are any possible end points, ends the game a little faster
         List<Vector3> endpoints = GetValidEndpoints();
         if (endpoints.Count == 0)
         {
@@ -111,7 +128,7 @@ public class MainAI : MonoBehaviour
             yield break;
         }
 
-        // pathfind to all the endpoints, and if they all are 1000, the game is over
+        // 3/3: pathfind to all the endpoints, and if they all are 1000, the game is over
         List<int> pathLengths = new();
         for (int i = 0; i < endpoints.Count; i++)
         {
@@ -178,11 +195,8 @@ public class MainAI : MonoBehaviour
         yield return null;
     }
 
-    public State GetState()
+    public State GetState(int xPos, int zPos)
     {
-        int xPos = (int)transform.position.x;
-        int zPos = (int)transform.position.z;
-
         // first check all possible moves, if any
         List<bool> possibleMoves = PossibleDirections(xPos, zPos);
 
@@ -236,10 +250,6 @@ public class MainAI : MonoBehaviour
 
         // display the current average similarity scores
         float x = GetAverage(averageSimilarity);
-        if (x == 0)
-        {
-            Debug.Log("e");
-        }
         similarityText.text = "Average Similarity: " + x.ToString("F3");
     }
 
@@ -324,14 +334,21 @@ public class MainAI : MonoBehaviour
     public float GetAverage(List<float> list)
     {
         float total = 0;
-        foreach(float f in list)
+        foreach (float f in list)
         {
             total += f;
         }
-        return total/list.Count;
+        return total / list.Count;
     }
     #endregion
     #region Decision Making and Feedback
+    /// <summary>
+    /// Decides an action given a current state by pulling from past states
+    /// </summary>
+    /// <param name="state">The current state of the AI</param>
+    /// <param name="xPos">X position of the AI</param>
+    /// <param name="zPos">Z position of the AI</param>
+    /// <returns></returns>
     Enums.Directions DecideAction(State state, int xPos, int zPos)
     {
         averageSimilarity.Clear();
@@ -383,6 +400,8 @@ public class MainAI : MonoBehaviour
                     }
                 }
             }
+            // not 100% guaranteed to do moves that are good
+            // but they are much more likely to happen
             if (potentialActions.Count > 0)
             {
                 int randomIndex = Rand.Range(0, potentialActions.Count - 1);
@@ -397,11 +416,11 @@ public class MainAI : MonoBehaviour
     }
 
     /// <summary>
-    /// Gives how similar history.status and toCompare are [0, 1]. Returns the number shared over the total.
+    /// Gives how similar history.status and toCompare are [0, 1].
     /// </summary>
-    /// <param name="history">The state in the past.</param>
-    /// <param name="toCompare">The state to compare to history.</param>
-    /// <returns></returns>
+    /// <param name="history">The state in the past</param>
+    /// <param name="toCompare">The state to compare to history</param>
+    /// <returns>[0, 1]</returns>
     float SimilarityScore(State history, State toCompare)
     {
         float similarity;
@@ -420,18 +439,18 @@ public class MainAI : MonoBehaviour
             }
         }
         // the length of the list is how many states they have in common
-        // take 1/4 of that to weigh the score (hyperparameter tuning sucks)
-        similarity = totalStates.Count / 4.0f;
+        similarity = totalStates.Count / similarityDirections;
 
         // next check position
         // use distance to check how close the ai was to the history point
         float distance = Vector2.Distance(new Vector2(history.x, history.z), new Vector2());
 
-        // take double the reciprocal to get between (0, 2] although its probably really low
-        distance = 2 / distance;
+        // take the reciprocal
+        distance = similarityDistance / distance;
 
         // add to similarity
         similarity += distance;
+        Debug.Log("Similarity score: " + similarity);
         return similarity;
     }
 
@@ -449,20 +468,25 @@ public class MainAI : MonoBehaviour
 
     float GetWeight(float decisionOutcome)
     {
-        if (decisionOutcome >= 0.5f)
+        if (decisionOutcome >= goodDecisionThreshhold)
         {
-            return decisionOutcome * 3; // Weight for good decisions
+            return decisionOutcome * goodDecisionWeight; // Weight for good decisions
         }
-        else if (decisionOutcome > -0.5f)
+        else if (decisionOutcome > okayDecisionThreshhold)
         {
-            return decisionOutcome * 1.5f; // Weight for okay decisions
+            return decisionOutcome * okayDecisionWeight; // Weight for okay decisions
         }
         else
         {
-            return decisionOutcome; // Weight for bad decisions
+            return decisionOutcome * badDecisionWeight; // Weight for bad decisions
         }
     }
 
+    /// <summary>
+    /// Returns a random direction from a list representing possible directions
+    /// </summary>
+    /// <param name="possibleActions">A boolean list with values corresponding to whether or not an action is valid</param>
+    /// <returns>Any random direction that is possible</returns>
     Enums.Directions ChooseRandomAction(List<bool> possibleActions)
     {
         // Choose a random action from the list of possible actions
@@ -488,6 +512,12 @@ public class MainAI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Gives the outcome for a specified choice by measuring how close it got us to the nearest endpoints
+    /// </summary>
+    /// <param name="currentPos">The current position as a Vector3</param>
+    /// <param name="newPos">Where the AI ended up moving</param>
+    /// <returns>[-1, 1] with -1 being a terrible move, and 1 being an amazing move. Returns 0 if currentPos is (4, 4)</returns>
     float DetermineChoiceOutcome(Vector3 currentPos, Vector3 newPos)
     {
         float choiceOutcome;
@@ -495,7 +525,7 @@ public class MainAI : MonoBehaviour
         int currentZ = (int)currentPos.z;
         int newX = (int)newPos.x;
         int newZ = (int)newPos.z;
-        
+
         // if we are at (4, 4) or the middle, return 0 immediately
         // it's hard to tell if moving from the middle is a good move sometimes
         if (currentX == 4 && currentZ == 4)
@@ -519,62 +549,62 @@ public class MainAI : MonoBehaviour
         if (previousEdges.Count == 0)
         {
             GameManager.Instance.GameEnd(false);
+            return -1;
         }
 
-        // pathfind to all of them, then store the distance to all the points
+        // pathfind to all of the previous endpoints, then store the distance to all the points
         // the indexes will match
-        List<int> pathLength = new();
+        List<int> previousPathLength = new();
         for (int i = 0; i < previousEdges.Count; i++)
         {
             int endX = (int)previousEdges[i].x;
             int endZ = (int)previousEdges[i].z;
-            pathLength.Add(TargetPath(currentX, currentZ, endX, endZ));
+            previousPathLength.Add(TargetPath(currentX, currentZ, endX, endZ));
         }
 
         // find the smallest endpoint distance
         int minDistance = 1000;
-        for (int j = 0; j < previousEdges.Count; j++)
+        for (int i = 0; i < previousEdges.Count; i++)
         {
-            if (pathLength[j] < minDistance)
+            if (previousPathLength[i] < minDistance)
             {
-                minDistance = pathLength[j];
+                minDistance = previousPathLength[i];
             }
         }
 
-        // from the smallest endpoint distance find the endpoints with that distance
+        // from the smallest endpoint distance, find the endpoints with that distance
         List<Vector3> closestEndpoints = new();
         List<int> previousEndpointDistance = new();
-        for (int k = 0; k < previousEdges.Count; k++)
+        for (int i = 0; i < previousEdges.Count; i++)
         {
-            if (pathLength[k] == minDistance)
+            if (previousPathLength[i] == minDistance)
             {
                 // add the endpoint that corresponds to this index
-                closestEndpoints.Add(previousEdges[k]);
-                previousEndpointDistance.Add(pathLength[k]);
+                closestEndpoints.Add(previousEdges[i]);
+                previousEndpointDistance.Add(previousPathLength[i]);
             }
         }
 
         // then pathfind to the closest points again using the new simulated position
-        // keep track of the change in distance
         List<int> newEndpointDistance = new();
-        for (int m = 0; m < closestEndpoints.Count; m++)
+        for (int i = 0; i < closestEndpoints.Count; i++)
         {
-            int endX = (int)closestEndpoints[m].x;
-            int endZ = (int)closestEndpoints[m].z;
+            int endX = (int)closestEndpoints[i].x;
+            int endZ = (int)closestEndpoints[i].z;
             newEndpointDistance.Add(TargetPath(newX, newZ, endX, endZ));
         }
 
         // then store the changes in distance to all points
-        List<int> changeInDistance = new();
-        for (int n = 0; n < newEndpointDistance.Count; n++)
+        List <float> changeInDistance = new();
+        for (int i = 0; i < newEndpointDistance.Count; i++)
         {
             // make sure to do previous - new, so that a good value is indicated by positive
-            int delta = previousEndpointDistance[n] - newEndpointDistance[n];
+            float delta = previousEndpointDistance[i] - newEndpointDistance[i];
             changeInDistance.Add(delta);
         }
 
         // finally take the average of the change in distance list
-        choiceOutcome = (float)changeInDistance.Average();
+        choiceOutcome = changeInDistance.Average();
         choiceOutcome = Mathf.Clamp(choiceOutcome, -1, 1);
         return choiceOutcome;
     }
@@ -610,7 +640,10 @@ public class MainAI : MonoBehaviour
             }
         }
     }
-
+    /// <summary>
+    /// Gets all the edgepoints that aren't blocked
+    /// </summary>
+    /// <returns>A list of non-blocked edgepoints</returns>
     List<Vector3> GetValidEndpoints()
     {
         List<Vector3> endpoints = new();
@@ -644,6 +677,14 @@ public class MainAI : MonoBehaviour
         return endpoints;
     }
 
+    /// <summary>
+    /// Tries to pathfind to a specified point
+    /// </summary>
+    /// <param name="startX">X starting position</param>
+    /// <param name="startZ">Z starting position</param>
+    /// <param name="endX">X ending position</param>
+    /// <param name="endZ">Z ending position</param>
+    /// <returns>The length of the path to get from start to end, or 1000 if none</returns>
     int TargetPath(int startX, int startZ, int endX, int endZ)
     {
         SetDistance(startX, startZ);
@@ -750,6 +791,12 @@ public class MainAI : MonoBehaviour
     }
     #endregion
     #region Block Analysis
+    /// <summary>
+    /// Simulates moving the AI, if possible
+    /// </summary>
+    /// <param name="dir">The direction to move it in</param>
+    /// <param name="currentPos">Current position of the AI</param>
+    /// <returns>The resulting position as a Vector3 if valid, Vector3.zero if invalid</returns>
     Vector3 SimulateMove(Enums.Directions dir, Vector3 currentPos)
     {
         // uses the same code as MoveAI, but just returns a Vector3 instead of moving anything
@@ -763,6 +810,11 @@ public class MainAI : MonoBehaviour
         return Vector3.zero;
     }
 
+    /// <summary>
+    /// Called by the GameManager to update the local grid
+    /// </summary>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
     public void AddBlock(int x, int y)
     {
         // if there is already a block don't do anything
@@ -773,6 +825,12 @@ public class MainAI : MonoBehaviour
         MainGrid[x, y].isBlocked = true;
     }
 
+    /// <summary>
+    /// Counts the number of blocks in quadrants around the AI
+    /// </summary>
+    /// <param name="xPos">X position of the AI</param>
+    /// <param name="zPos">Z position of the AI</param>
+    /// <returns>A list of floats corresponding to how many blocks are in each quadrant (weighted)</returns>
     List<float> DetectBlocks(float xPos, float zPos)
     {
         Vector2 aiPos = new(xPos, zPos);
@@ -820,17 +878,12 @@ public class MainAI : MonoBehaviour
         floats.Add(blockCountSE);
         floats.Add(blockCountSW);
 
-        for (int i = 0; i < floats.Count; i++)
-        {
-            floats[i] = Mathf.CeilToInt(floats[i]);
-        }
-
         return floats;
     }
     #endregion
     #region Moving
     /// <summary>
-    /// Use this function to check whether or not AI can move in this direction.
+    /// Returns whether or not AI can move in this direction.
     /// </summary>
     /// <param name="dir">The Direction to be checked.</param>
     /// <returns>Whether or not the direction is blocked.</returns>
@@ -860,6 +913,12 @@ public class MainAI : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Gets all the possible moves for the AI at its current position
+    /// </summary>
+    /// <param name="posX">X position of the AI</param>
+    /// <param name="posZ">Y position of the AI</param>
+    /// <returns></returns>
     List<bool> PossibleDirections(int posX, int posZ)
     {
         List<bool> possibleMoves = new();
@@ -874,6 +933,12 @@ public class MainAI : MonoBehaviour
         return possibleMoves;
     }
 
+    /// <summary>
+    /// Checks if the current position is on the edge of the square
+    /// </summary>
+    /// <param name="posX">X position of the AI</param>
+    /// <param name="posZ">Z position of the AI</param>
+    /// <returns>True if the AI is on the edge of the square, and false otherwise</returns>
     bool CheckWin(int posX, int posZ)
     {
         // a win is considered to be each side of the square
@@ -888,6 +953,10 @@ public class MainAI : MonoBehaviour
         return false;
     }
 
+    /// <summary>
+    /// Moves the AI in a specified direction dir
+    /// </summary>
+    /// <param name="dir">The direction to move the AI</param>
     void MoveAI(Enums.Directions dir)
     {
         Vector3 currentPos = transform.position;

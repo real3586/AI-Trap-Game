@@ -5,7 +5,9 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    // all code is finalized
+    private static WaitForSeconds _waitForSeconds0_5 = new WaitForSeconds(0.5f);
+    private static WaitForSeconds _waitForSeconds0_25 = new WaitForSeconds(0.25f);
+
     public static GameManager Instance { get; private set; }
 
     [SerializeField] GameObject mainAI;
@@ -69,19 +71,19 @@ public class GameManager : MonoBehaviour
 
     IEnumerator MainSequence()
     {
-        yield return new WaitForSeconds(0.25f);
+        yield return _waitForSeconds0_25;
 
         yield return StartCoroutine(PlaceBlock());
-        yield return new WaitForSeconds(0.5f);
+        yield return _waitForSeconds0_5;
         StartCoroutine(MainAI.Instance.AISequence());
     }
 
     IEnumerator AlgoSequence()
     {
-        yield return new WaitForSeconds(0.25f);
+        yield return _waitForSeconds0_25;
         
         yield return StartCoroutine(PlaceBlock());
-        yield return new WaitForSeconds(0.5f);
+        yield return _waitForSeconds0_5;
         StartCoroutine(MainAI.Instance.AlgoSequence());
     }
 
