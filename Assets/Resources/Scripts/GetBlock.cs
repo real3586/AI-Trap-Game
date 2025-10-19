@@ -6,13 +6,17 @@ public class GetBlock : MonoBehaviour
 {
     public void PlaceBlock()
     {
-        if (GameManager.Instance.mode == Enums.Modes.Algo)
+        switch (GameManager.Instance.mode)
         {
-            GameManager.Instance.RunSequenceAlgo();
-        }
-        else
-        {
-            GameManager.Instance.RunSequence();
+            case Enums.Modes.Algo:
+                GameManager.Instance.RunSequenceAlgo();
+                break;
+            case Enums.Modes.GAN:
+                GameManager.Instance.RunSequenceGAN();
+                break;
+            default:
+                GameManager.Instance.RunSequence();
+                break;
         }
     }
 }

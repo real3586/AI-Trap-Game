@@ -7,11 +7,10 @@ using UnityEngine;
 using UnityEngine.UI;
 using Rand = UnityEngine.Random;
 
-
 public class MainAI : MonoBehaviour
 {
     public static MainAI Instance { get; private set; }
-    public struct State
+    public struct MainState
     {
         /// <summary>
         /// How many sides are blocked? Uses a Quadrant system.
@@ -34,7 +33,7 @@ public class MainAI : MonoBehaviour
         /// </summary>
         public float decisionOutcome;
     }
-    List<State> QTable = new();
+    public List<MainState> QTable { get; private set; } = new();
     public struct GridItem
     {
         /// <summary>
@@ -47,7 +46,6 @@ public class MainAI : MonoBehaviour
         /// From 0 to 1, or (0, 1].
         /// </summary>
         public float blockWeight;
-
     }
     /// <summary>
     /// The MainGrid holds a grid of the GridItem struct.
@@ -114,7 +112,7 @@ public class MainAI : MonoBehaviour
         int xPos = (int)transform.position.x;
         int zPos = (int)transform.position.z;
 
-        State newState = GetState(xPos, zPos);
+        MainState newState = GetState(xPos, zPos);
 
         // check if the game is over, and AI cannot make it to the end
         // 1/3: if there are no possible moves, or the whole list is false
@@ -161,12 +159,12 @@ public class MainAI : MonoBehaviour
         arrow.transform.position += arrow.transform.forward * MathF.Sqrt(2) / 2;
 
         Vector3 hypotheticalPos = SimulateMove(newState.decidedAction, currentPosition);
-        if (GameManager.Instance.mode == Enums.Modes.Classic)
+        if (GameManager.Instance.mode == Enums.Modes.Classic || GameManager.Instance.mode == Enums.Modes.GAN)
         {
             // determine whether it was a good choice
             newState.decisionOutcome = DetermineChoiceOutcome(currentPosition, hypotheticalPos);
         }
-        else
+        else if (GameManager.Instance.mode == Enums.Modes.User)
         {
             // disable new blocks
             getBlockButton.gameObject.SetActive(false);
@@ -199,7 +197,7 @@ public class MainAI : MonoBehaviour
         yield return null;
     }
 
-    public State GetState(int xPos, int zPos)
+    public MainState GetState(int xPos, int zPos)
     {
         // first check all possible moves, if any
         List<bool> possibleMoves = PossibleDirections(xPos, zPos);
@@ -218,16 +216,16 @@ public class MainAI : MonoBehaviour
         }
         // if there is more than one highest or a tie, take them both
         List<Enums.BlockedDirections> mostBlockedDirections = new();
-        for (int j = 0; j < blockLocations.Count; j++)
+        for (int i = 0; i < blockLocations.Count; i++)
         {
-            if (blockLocations[j] == maxValue)
+            if (blockLocations[i] == maxValue)
             {
-                mostBlockedDirections.Add((Enums.BlockedDirections)j);
+                mostBlockedDirections.Add((Enums.BlockedDirections)i);
             }
         }
 
         // create a new state with these details
-        State newState = new()
+        MainState newState = new()
         {
             status = mostBlockedDirections,
             possibleActions = possibleMoves,
@@ -299,7 +297,7 @@ public class MainAI : MonoBehaviour
         }
     }
 
-    int[] GetPreviousStates(State state)
+    int[] GetPreviousStates(MainState state)
     {
         // iterate through each qtable element
         // count how many times the ai has been in a given state
@@ -311,7 +309,7 @@ public class MainAI : MonoBehaviour
             {
                 exactCount++;
             }
-            else if (SimilarityScore(QTable[i], state) >= 0.5f)
+            else if (SimilarityScore(QTable[i], state) >= similarityThreshold)
             {
                 similarCount++;
             }
@@ -353,7 +351,7 @@ public class MainAI : MonoBehaviour
     /// <param name="xPos">X position of the AI</param>
     /// <param name="zPos">Z position of the AI</param>
     /// <returns></returns>
-    Enums.Directions DecideAction(State state, int xPos, int zPos)
+    Enums.Directions DecideAction(MainState state, int xPos, int zPos)
     {
         averageSimilarity.Clear();
 
@@ -425,7 +423,7 @@ public class MainAI : MonoBehaviour
     /// <param name="history">The state in the past</param>
     /// <param name="toCompare">The state to compare to history</param>
     /// <returns>[0, 1]</returns>
-    float SimilarityScore(State history, State toCompare)
+    float SimilarityScore(MainState history, MainState toCompare)
     {
         float similarity;
 

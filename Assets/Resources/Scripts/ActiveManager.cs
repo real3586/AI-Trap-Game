@@ -8,7 +8,7 @@ public class ActiveManager : MonoBehaviour
     public static ActiveManager Instance;
 
     [SerializeField] GameObject optionsButton, optionsStuff, panel, gameStuff, 
-        menuStuff, winAndLose, playOptions, arrowObject, userModeStuff, analysisStuff, analysisButton,
+        menuStuff, winAndLose, playOptions, arrowObject, userModeStuff, GANStuff, analysisStuff, analysisButton,
         superAnalysisStuff, blockHighlight, howToPlayStuff;
     [SerializeField] TextMeshProUGUI dataPointsText;
 
@@ -28,6 +28,7 @@ public class ActiveManager : MonoBehaviour
         analysisButton.SetActive(false);
         analysisStuff.SetActive(false);
         blockHighlight.SetActive(false);
+        GANStuff.SetActive(false);
     }
 
     public void EscapeOptions()
@@ -103,6 +104,7 @@ public class ActiveManager : MonoBehaviour
         optionsButton.SetActive(true);
         arrowObject.SetActive(false);
         analysisButton.SetActive(true);
+        GANStuff.SetActive(false);
 
         GameManager.Instance.mode = Enums.Modes.Classic;
         MainAI.Instance.ResetTextFields();
@@ -116,8 +118,8 @@ public class ActiveManager : MonoBehaviour
         playOptions.SetActive(false);
         optionsButton.SetActive(true);
         analysisButton.SetActive(true);
-
         userModeStuff.SetActive(false);
+        GANStuff.SetActive(false);
 
         GameManager.Instance.mode = Enums.Modes.User;
         MainAI.Instance.ResetTextFields();
@@ -132,6 +134,7 @@ public class ActiveManager : MonoBehaviour
         playOptions.SetActive(false);
         optionsButton.SetActive(true);
         analysisButton.SetActive(true);
+        GANStuff.SetActive(false);
 
         GameManager.Instance.mode = Enums.Modes.Algo;
         MainAI.Instance.ResetTextFields();
@@ -144,6 +147,8 @@ public class ActiveManager : MonoBehaviour
         optionsButton.SetActive(true);
         arrowObject.SetActive(false);
         analysisButton.SetActive(true);
+        userModeStuff.SetActive(false);
+        GANStuff.SetActive(false);
 
         GameManager.Instance.mode = Enums.Modes.GAN;
         MainAI.Instance.ResetTextFields();
@@ -160,5 +165,6 @@ public class ActiveManager : MonoBehaviour
         panel.SetActive(true);
         winAndLose.SetActive(true);
         analysisButton.SetActive(false);
+        GANStuff.SetActive(false);
     }
 }

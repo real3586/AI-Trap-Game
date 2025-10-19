@@ -62,6 +62,15 @@ public class GameManager : MonoBehaviour
         }
         StartCoroutine(AlgoSequence());
     }
+    
+    public void RunSequenceGAN()
+    {
+        if (isPlacing)
+        {
+            return;
+        }
+        StartCoroutine(GANSequence());
+    }
 
     private void Update()
     {
@@ -91,12 +100,10 @@ public class GameManager : MonoBehaviour
         // GAN goes first
         yield return _waitForSeconds0_25;
         StartCoroutine(GAN_AI.Instance.GANSequence());
-        yield return new WaitUntil(() => UserProvidedFeedback);
 
         // then regular AI goes
         yield return _waitForSeconds0_25;
         StartCoroutine(MainAI.Instance.AISequence());
-        yield return new WaitUntil(() => UserProvidedFeedback);
     }
 
     // code from block defense lol
