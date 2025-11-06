@@ -8003,7 +8003,7 @@ Transform:
   m_GameObject: {fileID: 1280103074}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 11.700074, y: 0.7056198, z: -5.556223}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -8026,7 +8026,8 @@ MonoBehaviour:
   GANStuff: {fileID: 2067242297}
   GANText: {fileID: 1896011638}
   newBlockButton: {fileID: 1154305363}
-  devSkipConfirmation: 0
+  similarityThreshold: 1.5
+  devSkipConfirmation: 1
 --- !u!1 &1329530609
 GameObject:
   m_ObjectHideFlags: 0

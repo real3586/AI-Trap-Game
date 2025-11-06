@@ -423,7 +423,7 @@ public class MainAI : MonoBehaviour
     /// <param name="history">The state in the past</param>
     /// <param name="toCompare">The state to compare to history</param>
     /// <returns>[0, 1]</returns>
-    float SimilarityScore(MainState history, MainState toCompare)
+    public float SimilarityScore(MainState history, MainState toCompare)
     {
         float similarity;
 

@@ -21,7 +21,7 @@ public class GAN_AI : MonoBehaviour
         /// <summary>
         /// What was the MainAI's state?
         /// </summary>
-        public MainAI.MainState state;
+        public MainAI.MainState mainState;
 
         /// <summary>
         /// Where the GAN AI placed its block
@@ -39,6 +39,7 @@ public class GAN_AI : MonoBehaviour
     [SerializeField] GameObject GANStuff;
     [SerializeField] TextMeshProUGUI GANText;
     [SerializeField] Button newBlockButton;
+    [SerializeField] float similarityThreshold;
     [SerializeField] bool devSkipConfirmation = false;
 
     void Awake()
@@ -53,7 +54,7 @@ public class GAN_AI : MonoBehaviour
         {
             // if there are no states, initialize with an empty state
             // no struct constructors for some reason (sadge)
-            state = MainAI.Instance.QTable.Count == 0 ? new MainAI.MainState() : MainAI.Instance.QTable[^1]
+            mainState = MainAI.Instance.QTable.Count == 0 ? new MainAI.MainState() : MainAI.Instance.QTable[^1]
         };
 
 
@@ -61,7 +62,7 @@ public class GAN_AI : MonoBehaviour
         List<Vector2> blockChoices = GetAllBlockChoices();
 
         // decide the next action
-        gState.blockPlacedPos = DecideNextAction(gState.state, blockChoices);
+        gState.blockPlacedPos = DecideNextAction(gState.mainState, blockChoices);
 
         // place the block
         PlaceBlock(gState.blockPlacedPos);
@@ -73,7 +74,6 @@ public class GAN_AI : MonoBehaviour
 
         // update what the user sees, and wait for their response
         GANStuff.SetActive(true);
-        Debug.Log(gState);
         GANText.text = "The GAN AI decided to place the block at (" + gState.blockPlacedPos.x + ", " + gState.blockPlacedPos.y + ")";
 
         // disallow the player to place new blocks
@@ -98,7 +98,9 @@ public class GAN_AI : MonoBehaviour
                 {
                     // the MainAI isn't already on that square
                     if (MainAI.Instance.transform.position.x != i || MainAI.Instance.transform.position.z != j)
+                    {
                         blockChoices.Add(new Vector2(i, j));
+                    }
                 }
             }
         }
@@ -108,9 +110,8 @@ public class GAN_AI : MonoBehaviour
     Vector2 DecideNextAction(MainAI.MainState mainState, List<Vector2> blockChoices)
     {
         // check if there are any entries s.t. whatever state the MainAI was in matches whatever state it is in now
-        if (QTable.Count > 1000 && // change to 0 later, but 0 causes an error sometimes
-            QTable.Any(entry => entry.state.status.SequenceEqual(mainState.status)) /*||
-            QTable.Any(entry => SimilarityScore(state, entry) >= similarityThreshold)*/) // disregard similarity score for now
+        if (QTable.Count > 0 &&
+            QTable.Any(entry => SimilarityScore(entry, mainState) >= similarityThreshold))
         {
             // if we found a good move, and that move is valid (ie. there's nothing there) add it to the move list
             // weigh good moves more than worse ones
@@ -130,13 +131,44 @@ public class GAN_AI : MonoBehaviour
             return blockChoices[rand];
         }
     }
-    
+
     void PlaceBlock(Vector2 blockPos)
     {
         // create the block object and move it to the proper place
-        GameObject newBlock = Instantiate(blockPrefab, new Vector3(blockPos.x, 1, blockPos.y), Quaternion.identity, blockParent.transform);
+        Instantiate(blockPrefab, new Vector3(blockPos.x, 1, blockPos.y), Quaternion.identity, blockParent.transform);
 
         // update the main grid to reflect this
         MainAI.Instance.AddBlock((int)blockPos.x, (int)blockPos.y);
     }
+    
+    float SimilarityScore(GANState history, MainAI.MainState current)
+    {
+        float similarity = 0;
+
+        // get the distance of where the MainAI was between both states
+        similarity += Vector2.Distance(new Vector2(history.mainState.x, history.mainState.z), new Vector2(current.x, current.z));
+
+        // since we want lower distances to have higher similarity, take the reciprocal
+        // use a try block to prevent division by zero
+        try
+        {
+            similarity = 1 / similarity;
+            Debug.Log("after reciprocal: " + similarity);
+        }
+        catch
+        {
+            // very similar
+            similarity = 2;
+        }
+
+        // also get the similarity score from the MainAI directly
+        if (current.status != null && history.mainState.status != null)
+        {
+            float temp = MainAI.Instance.SimilarityScore(history.mainState, current);
+            Debug.Log("similarity score of main ai: " + temp);
+            similarity += temp;
+        }
+        Debug.Log(similarity);
+        return similarity;
+        }
 }
